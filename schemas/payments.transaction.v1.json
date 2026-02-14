@@ -1,0 +1,39 @@
+{
+  "$id": "payments.transaction.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Payment Transaction",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Transaction identifier"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Transaction amount in smallest currency unit"
+    },
+    "currency": {
+      "type": "string",
+      "description": "ISO 4217 currency code"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "paid", "failed", "refunded"],
+      "description": "Payment status"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of transaction creation"
+    },
+    "customer_id": {
+      "type": "string",
+      "description": "Customer identifier"
+    },
+    "description": {
+      "type": "string",
+      "description": "Payment description"
+    }
+  },
+  "required": ["id", "amount", "currency", "status"]
+}

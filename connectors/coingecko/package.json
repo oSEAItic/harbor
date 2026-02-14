@@ -1,0 +1,21 @@
+{
+  "name": "harbor-connector-coingecko",
+  "version": "0.1.0",
+  "description": "Harbor connector for CoinGecko cryptocurrency data",
+  "main": "dist/index.js",
+  "bin": {
+    "coingecko": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "harbor-sdk": "file:../../sdk/typescript"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

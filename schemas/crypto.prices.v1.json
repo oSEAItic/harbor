@@ -1,0 +1,25 @@
+{
+  "$id": "crypto.prices.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cryptocurrency Price",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Coin identifier"
+    },
+    "usd": {
+      "type": "number",
+      "description": "Price in USD"
+    },
+    "usd_market_cap": {
+      "type": "number",
+      "description": "Market cap in USD"
+    },
+    "usd_24h_change": {
+      "type": "number",
+      "description": "24h price change percentage"
+    }
+  },
+  "required": ["id"]
+}

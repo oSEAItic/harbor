@@ -13,7 +13,8 @@
   <a href="#why-context-engineering">Context Engineering</a> &middot;
   <a href="#creating-a-connector">Build a Connector</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
-  <a href="LICENSE">License</a>
+  <a href="LICENSE">License</a> &middot;
+  <a href="README.CN.md">中文</a>
 </p>
 
 ---

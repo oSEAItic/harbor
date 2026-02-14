@@ -18,29 +18,33 @@ func newListCmd() *cobra.Command {
 				return fmt.Errorf("listing installed connectors: %w", err)
 			}
 
-			fmt.Println("Installed connectors:")
-			if len(installed) == 0 {
-				fmt.Println("  (none)")
+			installedSet := make(map[string]bool)
+			for _, name := range installed {
+				installedSet[name] = true
 			}
-			for _, c := range installed {
-				fmt.Printf("  - %s\n", c)
+
+			fmt.Println("Connectors:")
+			catalog := registry.ListCatalog()
+			for _, entry := range catalog {
+				status := "  "
+				if installedSet[entry.ID] {
+					status = "* "
+				}
+				fmt.Printf("  %s%-12s  %s  (%s)\n", status, entry.ID, entry.Description, entry.Version)
+			}
+
+			if len(catalog) == 0 {
+				fmt.Println("  (catalog is empty)")
 			}
 
 			fmt.Println()
+			fmt.Println("  * = installed")
 
-			available, err := registry.ListAvailable()
-			if err != nil {
-				fmt.Println("Available connectors:")
-				fmt.Println("  (could not fetch registry)")
-				return nil
-			}
-
-			fmt.Println("Available connectors:")
-			if len(available) == 0 {
-				fmt.Println("  (none)")
-			}
-			for _, c := range available {
-				fmt.Printf("  - %s\n", c.ID)
+			// Show any installed connectors not in catalog
+			for _, name := range installed {
+				if registry.LookupCatalog(name) == nil {
+					fmt.Printf("  (unknown) %s\n", name)
+				}
 			}
 
 			return nil

@@ -8,15 +8,24 @@ import (
 )
 
 func newInstallCmd() *cobra.Command {
-	return &cobra.Command{
+	var fromPath string
+
+	cmd := &cobra.Command{
 		Use:   "install <connector>",
-		Short: "Install a connector from the registry",
+		Short: "Install a connector from the catalog or a local bundle",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			fmt.Printf("Installing connector: %s\n", name)
 
-			if err := registry.Install(name); err != nil {
+			var err error
+			if fromPath != "" {
+				fmt.Printf("  source: %s (local)\n", fromPath)
+				err = registry.InstallFromLocal(name, fromPath)
+			} else {
+				err = registry.Install(name)
+			}
+			if err != nil {
 				return fmt.Errorf("install %s: %w", name, err)
 			}
 
@@ -24,6 +33,10 @@ func newInstallCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&fromPath, "from", "", "Install from a local bundle file instead of downloading")
+
+	return cmd
 }
 
 func newUninstallCmd() *cobra.Command {

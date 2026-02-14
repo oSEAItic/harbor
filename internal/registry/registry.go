@@ -1,98 +1,84 @@
 package registry
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/oseaitic/harbor/internal/connector"
 )
 
-const defaultRegistryURL = "https://raw.githubusercontent.com/oseaitic/harbor-registry/main/registry.json"
+// Install looks up a connector in the embedded catalog, checks prerequisites,
+// downloads the bundle, and installs it to ~/.harbor/connectors/{name}.
+func Install(name string) error {
+	entry := LookupCatalog(name)
+	if entry == nil {
+		available := ListCatalog()
+		ids := make([]string, len(available))
+		for i, e := range available {
+			ids[i] = e.ID
+		}
+		return fmt.Errorf("connector %q not found in catalog. Available: %v", name, ids)
+	}
 
-// ConnectorEntry describes a connector in the registry.
-type ConnectorEntry struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Version  string   `json:"version"`
-	Binary   string   `json:"binary"`
-	Checksum string   `json:"checksum"`
-	Schemas  []string `json:"schemas"`
-}
+	// Check runtime prerequisite
+	if entry.Runtime == "node" {
+		if _, err := exec.LookPath("node"); err != nil {
+			return fmt.Errorf("connector %q requires Node.js but 'node' was not found in PATH", name)
+		}
+	}
 
-// RegistryManifest is the top-level registry file.
-type RegistryManifest struct {
-	Connectors []ConnectorEntry `json:"connectors"`
-}
-
-// ListAvailable fetches the registry and returns available connectors.
-func ListAvailable() ([]ConnectorEntry, error) {
-	resp, err := http.Get(defaultRegistryURL)
+	// Download the bundle
+	fmt.Printf("  downloading %s v%s ...\n", entry.Name, entry.Version)
+	resp, err := http.Get(entry.DownloadURL)
 	if err != nil {
-		return nil, fmt.Errorf("fetching registry: %w", err)
+		return fmt.Errorf("downloading connector: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("registry returned status %d", resp.StatusCode)
+		return fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, entry.DownloadURL)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading registry: %w", err)
+		return fmt.Errorf("reading download: %w", err)
 	}
 
-	var manifest RegistryManifest
-	if err := json.Unmarshal(body, &manifest); err != nil {
-		return nil, fmt.Errorf("parsing registry: %w", err)
-	}
-
-	return manifest.Connectors, nil
+	return writeConnector(name, body)
 }
 
-// Install downloads and installs a connector from the registry.
-func Install(name string) error {
-	entries, err := ListAvailable()
+// InstallFromLocal copies a local bundle file into the connectors directory.
+// This is used for local development via `harbor install --from <path>`.
+func InstallFromLocal(name, path string) error {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("reading local bundle %q: %w", path, err)
 	}
 
-	var entry *ConnectorEntry
-	for _, e := range entries {
-		if e.ID == name {
-			entry = &e
-			break
-		}
-	}
-	if entry == nil {
-		return fmt.Errorf("connector %q not found in registry", name)
-	}
+	return writeConnector(name, data)
+}
 
-	// Ensure connectors directory exists
+// writeConnector writes bundle bytes to the connectors dir and makes it executable.
+func writeConnector(name string, data []byte) error {
 	dir := connector.ConnectorsDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating connectors dir: %w", err)
 	}
 
-	destPath := filepath.Join(dir, entry.ID)
-
-	// TODO: Download binary from registry CDN, verify checksum
-	// For now, create a placeholder
-	f, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("creating connector file: %w", err)
-	}
-	f.Close()
-
-	if err := os.Chmod(destPath, 0o755); err != nil {
-		return fmt.Errorf("setting permissions: %w", err)
+	destPath := filepath.Join(dir, name)
+	if err := os.WriteFile(destPath, data, 0o755); err != nil {
+		return fmt.Errorf("writing connector file: %w", err)
 	}
 
-	fmt.Printf("  version: %s\n", entry.Version)
-	fmt.Printf("  schemas: %v\n", entry.Schemas)
+	entry := LookupCatalog(name)
+	if entry != nil {
+		fmt.Printf("  version: %s\n", entry.Version)
+		fmt.Printf("  schemas: %v\n", entry.Schemas)
+	}
 
 	return nil
 }

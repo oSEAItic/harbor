@@ -15,6 +15,10 @@ func NewRootCmd(version string) *cobra.Command {
 data sources via connectors. Connectors expose normalized JSON output
 with source provenance and schema versioning.`,
 		SilenceUsage: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			printBanner(version)
+			cmd.Help()
+		},
 	}
 
 	root.PersistentFlags().StringVarP(&outputFormat, "output", "o", "pretty", "Output format: pretty | json")

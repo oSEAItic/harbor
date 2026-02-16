@@ -151,7 +151,84 @@ harbor raw coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 
 # List all installed + available connectors
 harbor list
+
+# Recall data from memory
+harbor recall coingecko.prices --layer summary
+harbor recall --list
+harbor recall --search "bitcoin"
 ```
+
+## MCP Proxy — Wrap Any MCP Server
+
+Harbor can act as a transparent proxy in front of any existing MCP server (Notion, GitHub, filesystem, Slack, etc.). It re-discovers the upstream server's tools, automatically compresses output with learned schemas, and caches results to memory. The agent config change is one line:
+
+```json
+{
+  "mcpServers": {
+    "notion": {
+      "command": "harbor",
+      "args": ["proxy", "notion-mcp-server"]
+    }
+  }
+}
+```
+
+No environment variables or API keys required. On first call, Harbor passes through raw output and prompts the agent to call `harbor_learn_schema` to teach compression. After that, all future calls are automatically compressed — permanently. Every agent on the machine benefits from schemas learned by any other agent.
+
+```
+Agent (Claude/Cursor)
+  ↓ MCP stdio
+Harbor Proxy (MCP Server)
+  ├── schema check → compress if learned
+  ├── memory check → return cached if fresh
+  ├── harbor_learn_schema → agent teaches compression
+  ├── harbor_recall → cross-session memory search
+  ↓ MCP stdio (client)
+Upstream MCP Server (any)
+```
+
+## MCP Server — Native MCP for Built-in Connectors
+
+Harbor also exposes all installed connectors as native MCP tools:
+
+```json
+{
+  "mcpServers": {
+    "harbor": {
+      "command": "harbor",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Tool calls run through Harbor's pipeline — execute, context-compile, and cache to 4-layer memory — so agents get compression and memory for free.
+
+## Memory & Recall
+
+Every `harbor get` and every proxied tool call is cached into a 4-layer memory system:
+
+| Layer | Content | Use case |
+|-------|---------|----------|
+| `raw` | Original API / tool output | Full fidelity when needed |
+| `normalized` | Connector's `data[]` array | Structured records |
+| `compact` | Summary fields only | Token-efficient context |
+| `summary` | Natural language one-liner | Quick scanning |
+
+Recall data from memory via CLI or MCP tool:
+
+```bash
+# Browse recent memories
+harbor recall --list
+
+# Search by keyword
+harbor recall --search "bitcoin"
+
+# Retrieve a specific memory
+harbor recall coingecko.prices --layer compact
+```
+
+Agents connected via MCP can call `harbor_recall` to search and retrieve memories across sessions.
 
 ### Agent integration (Python example)
 
@@ -377,19 +454,28 @@ harbor/
 ├── assets/              # Logo and brand assets
 ├── cmd/harbor/          # CLI entrypoint
 ├── internal/
-│   ├── cli/             # Command implementations
+│   ├── cli/             # Command implementations (get, recall, proxy, mcp, ...)
 │   ├── protocol/        # Request/response types + validation
-│   ├── connector/       # Plugin executor
+│   ├── connector/       # Plugin executor + tool schema export
+│   ├── context/         # Context compiler (field filtering + NL summary)
+│   ├── memory/          # 4-layer memory store (~/.harbor/memory/)
+│   ├── recall/          # harbor_recall MCP tool (shared by mcp + proxy)
+│   ├── schema/          # Learned compression schemas (~/.harbor/schemas/)
+│   ├── pipeline/        # Execute → compile → memory pipeline
+│   ├── proxy/           # Transparent MCP proxy (server + client)
+│   ├── mcpserver/       # Native MCP server for built-in connectors
 │   ├── auth/            # OS keychain abstraction
 │   ├── registry/        # Connector install/list from registry
-│   └── cache/           # Local response cache with TTL
+│   └── generator/       # Connector scaffolding generator
 ├── gateway/             # Optional REST server for hosted agents
 ├── sdk/
 │   ├── typescript/      # TypeScript connector SDK
 │   └── python/          # Python connector SDK
 ├── schemas/             # Canonical JSON Schemas
 ├── connectors/
-│   └── coingecko/       # Reference connector
+│   ├── coingecko/       # Reference connector (crypto)
+│   └── yahoo/           # Reference connector (finance)
+├── docs/                # Connector spec (agent-readable)
 ├── Makefile
 └── LICENSE              # Apache 2.0
 ```

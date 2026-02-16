@@ -1,0 +1,24 @@
+{
+  "name": "harbor-connector-yahoo",
+  "version": "0.1.0",
+  "description": "Harbor connector for Yahoo Finance market data",
+  "main": "dist/index.js",
+  "bin": {
+    "yahoo": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/yahoo.js --banner:js=\"#!/usr/bin/env node\""
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "harbor-sdk": "file:../../sdk/typescript",
+    "yahoo-finance2": "^3.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.20.0"
+  }
+}

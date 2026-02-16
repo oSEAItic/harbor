@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harbor.dev/schemas/connector.schema.json",
+  "title": "Harbor Connector Tool Schemas",
+  "description": "Validates the output of a connector's --describe flag",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/ToolSchema"
+  },
+  "minItems": 1,
+  "$defs": {
+    "ToolSchema": {
+      "type": "object",
+      "required": ["type", "function"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "function",
+          "description": "Must be 'function' (OpenAI function-calling format)"
+        },
+        "function": {
+          "$ref": "#/$defs/ToolFunction"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ToolFunction": {
+      "type": "object",
+      "required": ["name", "description", "parameters"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*\\.[a-z][a-z0-9_-]*$",
+          "description": "Resource name in 'connector.resource' format (e.g. 'coingecko.prices')"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Human-readable description of what this resource does"
+        },
+        "parameters": {
+          "type": "object",
+          "required": ["type", "properties"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["type", "description"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["string", "number", "integer", "boolean", "array", "object"]
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "enum": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "default": {}
+                }
+              }
+            },
+            "required": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "summary_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields to keep in the compact memory layer"
+        },
+        "summary_template": {
+          "type": "string",
+          "description": "Template with {field} placeholders for natural language summaries"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

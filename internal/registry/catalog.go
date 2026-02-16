@@ -22,6 +22,15 @@ var catalog = []CatalogEntry{
 		DownloadURL: "https://github.com/oseaitic/harbor/releases/download/v0.1.0/coingecko.js",
 		Schemas:     []string{"crypto.prices.v1", "crypto.coin.v1", "crypto.trending.v1"},
 	},
+	{
+		ID:          "yahoo",
+		Name:        "Yahoo Finance",
+		Version:     "0.1.0",
+		Description: "Stock quotes, company summaries, search, and trending symbols from Yahoo Finance",
+		Runtime:     "node",
+		DownloadURL: "https://github.com/oseaitic/harbor/releases/download/v0.1.0/yahoo.js",
+		Schemas:     []string{"finance.quote.v1", "finance.summary.v1", "finance.search.v1", "finance.trending.v1"},
+	},
 }
 
 // ListCatalog returns all connectors in the embedded catalog.

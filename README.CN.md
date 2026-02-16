@@ -151,7 +151,84 @@ harbor raw coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 
 # 列出所有已安装和可用的连接器
 harbor list
+
+# 从记忆中检索数据
+harbor recall coingecko.prices --layer summary
+harbor recall --list
+harbor recall --search "bitcoin"
 ```
+
+## MCP Proxy — 包装任意 MCP 服务器
+
+Harbor 可以作为透明代理, 挡在任何现有 MCP 服务器 (Notion, GitHub, 文件系统, Slack 等) 前面。它会自动发现上游服务器的工具, 用学习到的 schema 压缩输出, 并将结果缓存到记忆层。Agent 配置只需改一行:
+
+```json
+{
+  "mcpServers": {
+    "notion": {
+      "command": "harbor",
+      "args": ["proxy", "notion-mcp-server"]
+    }
+  }
+}
+```
+
+无需环境变量或 API Key。首次调用时, Harbor 直接透传原始输出并提示 Agent 调用 `harbor_learn_schema` 来教会压缩方式。之后所有调用自动压缩 — 永久生效。同一台机器上的所有 Agent 共享已学习的 schema。
+
+```
+Agent (Claude/Cursor)
+  ↓ MCP stdio
+Harbor Proxy (MCP Server)
+  ├── schema 检查 → 有 schema 则压缩
+  ├── memory 检查 → 有缓存则直接返回
+  ├── harbor_learn_schema → Agent 教会压缩
+  ├── harbor_recall → 跨会话记忆搜索
+  ↓ MCP stdio (client)
+Upstream MCP Server (任意)
+```
+
+## MCP Server — 内置连接器的原生 MCP 支持
+
+Harbor 也可以将所有已安装的连接器暴露为原生 MCP 工具:
+
+```json
+{
+  "mcpServers": {
+    "harbor": {
+      "command": "harbor",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+工具调用经过 Harbor 的完整 pipeline — 执行、上下文压缩、缓存到 4 层记忆 — Agent 自动获得压缩和记忆功能。
+
+## 记忆与检索
+
+每次 `harbor get` 和每次代理的工具调用都会缓存到 4 层记忆系统:
+
+| 层级 | 内容 | 用途 |
+|------|------|------|
+| `raw` | 原始 API / 工具输出 | 需要完整保真度时使用 |
+| `normalized` | 连接器的 `data[]` 数组 | 结构化记录 |
+| `compact` | 仅摘要字段 | 省 token 的上下文 |
+| `summary` | 自然语言一行摘要 | 快速浏览 |
+
+通过 CLI 或 MCP 工具检索记忆:
+
+```bash
+# 浏览最近记忆
+harbor recall --list
+
+# 关键词搜索
+harbor recall --search "bitcoin"
+
+# 检索特定记忆
+harbor recall coingecko.prices --layer compact
+```
+
+通过 MCP 连接的 Agent 可以调用 `harbor_recall` 来跨会话搜索和检索记忆。
 
 ### Agent 集成（Python 示例）
 
@@ -377,19 +454,28 @@ harbor/
 ├── assets/              # Logo 和品牌素材
 ├── cmd/harbor/          # CLI 入口
 ├── internal/
-│   ├── cli/             # 命令实现
+│   ├── cli/             # 命令实现 (get, recall, proxy, mcp, ...)
 │   ├── protocol/        # 请求/响应类型 + 验证
-│   ├── connector/       # 插件执行器
+│   ├── connector/       # 插件执行器 + 工具 Schema 导出
+│   ├── context/         # 上下文编译器 (字段过滤 + 自然语言摘要)
+│   ├── memory/          # 4 层记忆存储 (~/.harbor/memory/)
+│   ├── recall/          # harbor_recall MCP 工具 (mcp + proxy 共享)
+│   ├── schema/          # 学习到的压缩 Schema (~/.harbor/schemas/)
+│   ├── pipeline/        # 执行 → 编译 → 记忆 pipeline
+│   ├── proxy/           # 透明 MCP 代理 (server + client)
+│   ├── mcpserver/       # 内置连接器的原生 MCP 服务器
 │   ├── auth/            # 操作系统钥匙串抽象
 │   ├── registry/        # 连接器安装/列表（从注册中心）
-│   └── cache/           # 本地响应缓存（带 TTL）
+│   └── generator/       # 连接器脚手架生成器
 ├── gateway/             # 可选的 REST 服务器（用于托管 Agent）
 ├── sdk/
 │   ├── typescript/      # TypeScript 连接器 SDK
 │   └── python/          # Python 连接器 SDK
 ├── schemas/             # 规范 JSON Schema
 ├── connectors/
-│   └── coingecko/       # 参考连接器
+│   ├── coingecko/       # 参考连接器（加密货币）
+│   └── yahoo/           # 参考连接器（金融）
+├── docs/                # 连接器规范（Agent 可读）
 ├── Makefile
 └── LICENSE              # Apache 2.0
 ```

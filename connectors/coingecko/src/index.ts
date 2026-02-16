@@ -35,6 +35,8 @@ const toolSchemas: HarborToolSchema[] = [
         },
         required: ["ids", "vs_currencies"],
       },
+      summary_fields: ["id", "usd", "usd_24h_change", "usd_market_cap"],
+      summary_template: "{id}: ${usd} ({usd_24h_change}%)",
     },
   },
   {
@@ -52,6 +54,8 @@ const toolSchemas: HarborToolSchema[] = [
         },
         required: ["id"],
       },
+      summary_fields: ["id", "name", "symbol", "market_cap_rank"],
+      summary_template: "{name} ({symbol}) — rank #{market_cap_rank}",
     },
   },
   {
@@ -63,6 +67,8 @@ const toolSchemas: HarborToolSchema[] = [
         type: "object",
         properties: {},
       },
+      summary_fields: ["id", "name", "symbol", "market_cap_rank", "score"],
+      summary_template: "{name} ({symbol}, #{market_cap_rank})",
     },
   },
 ];

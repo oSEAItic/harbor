@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { execFile } from "child_process";
 
 // ── Protocol types ──────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ export interface HarborToolSchema {
     name: string;
     description: string;
     parameters: Record<string, unknown>;
+    summary_fields?: string[];
+    summary_template?: string;
   };
 }
 
@@ -115,6 +118,65 @@ export function errorResponse(
     raw: null,
     errors: [{ code, message }],
   };
+}
+
+// ── CLI adapter ─────────────────────────────────────────────────
+
+export interface ExecCLIOptions {
+  cwd?: string;
+  env?: Record<string, string>;
+  timeout?: number;
+  parseJSON?: boolean;
+}
+
+/**
+ * Execute an external CLI tool and capture its output.
+ * Uses execFile (no shell) to avoid command injection.
+ *
+ * Example — wrapping Notion CLI:
+ * ```ts
+ * const raw = await execCLI("notion", ["search", "--query", params.query, "--format", "json"]);
+ * ```
+ */
+export function execCLI(
+  command: string,
+  args: string[],
+  options?: ExecCLIOptions
+): Promise<unknown> {
+  const timeout = options?.timeout ?? 30_000;
+  const parseJSON = options?.parseJSON ?? true;
+
+  return new Promise((resolve, reject) => {
+    const proc = execFile(
+      command,
+      args,
+      {
+        cwd: options?.cwd,
+        env: options?.env ? { ...process.env, ...options.env } : undefined,
+        timeout,
+        maxBuffer: 10 * 1024 * 1024, // 10 MB
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          const msg = stderr?.trim() || error.message;
+          reject(new Error(`${command} failed: ${msg}`));
+          return;
+        }
+
+        const output = stdout.trim();
+
+        if (parseJSON) {
+          try {
+            resolve(JSON.parse(output));
+          } catch {
+            resolve(output);
+          }
+        } else {
+          resolve(output);
+        }
+      }
+    );
+  });
 }
 
 // ── Describe helper ─────────────────────────────────────────────

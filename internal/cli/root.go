@@ -32,6 +32,11 @@ with source provenance and schema versioning.`,
 		newGetCmd(outputFormat),
 		newRawCmd(),
 		newToolsCmd(),
+		newRecallCmd(),
+		newScaffoldCmd(),
+		newBuildCmd(),
+		newMCPCmd(version),
+		newProxyCmd(version),
 	)
 
 	return root

@@ -6,10 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
-	"github.com/oseaitic/harbor/internal/cache"
-	"github.com/oseaitic/harbor/internal/connector"
+	harborctx "github.com/oseaitic/harbor/internal/context"
+	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
 )
 
@@ -18,8 +17,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-
-	responseCache := cache.New(5 * time.Minute)
 
 	mux := http.NewServeMux()
 
@@ -43,17 +40,9 @@ func main() {
 			return
 		}
 
-		// Check cache
-		cacheKey := cache.Key(req.Connector, req.Resource, req.Params)
-		if cached := responseCache.Get(cacheKey); cached != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("X-Harbor-Cache", "hit")
-			w.Write(cached)
-			return
-		}
-
-		// Execute connector
-		resp, err := connector.Execute(req)
+		result, err := pipeline.Execute(req.Connector, req.Resource, req.Params, nil, pipeline.Options{
+			Compile: harborctx.DefaultOptions(),
+		})
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadGateway)
@@ -62,12 +51,14 @@ func main() {
 			return
 		}
 
-		// Cache the response
-		respBytes, _ := json.Marshal(resp)
-		responseCache.Set(cacheKey, respBytes)
+		respBytes, _ := json.Marshal(result.Response)
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Harbor-Cache", "miss")
+		if result.FromMem {
+			w.Header().Set("X-Harbor-Cache", "hit")
+		} else {
+			w.Header().Set("X-Harbor-Cache", "miss")
+		}
 		w.Write(respBytes)
 	})
 

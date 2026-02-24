@@ -6,10 +6,10 @@ import {
   handleDescribe,
   type HarborToolSchema,
 } from "harbor-sdk";
-import YahooFinance from "yahoo-finance2";
 
 const CONNECTOR_VERSION = "0.1.0";
 const SOURCE = "yahoo";
+const BASE_URL = "https://query1.finance.yahoo.com";
 
 // ── Tool schemas for LLM integration ────────────────────────────
 
@@ -124,21 +124,53 @@ const toolSchemas: HarborToolSchema[] = [
 
 // ── Resource handlers ───────────────────────────────────────────
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+type JsonObject = Record<string, unknown>;
+type JsonArray = JsonObject[];
+
+function normalizeSymbols(input: string): string[] {
+  return input
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+async function fetchJSON(url: string): Promise<JsonObject> {
+  const resp = await fetch(url, {
+    headers: {
+      "User-Agent": "harbor-yahoo-connector/0.1.0",
+      Accept: "application/json",
+    },
+  });
+
+  if (!resp.ok) {
+    throw new Error(`Yahoo API error: ${resp.status}`);
+  }
+
+  const data = (await resp.json()) as unknown;
+  if (!data || typeof data !== "object") {
+    throw new Error("Yahoo API returned invalid JSON");
+  }
+  return data as JsonObject;
+}
+
+async function fetchQuoteRows(symbols: string[]): Promise<JsonArray> {
+  if (symbols.length === 0) return [];
+
+  const url = `${BASE_URL}/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
+  const payload = await fetchJSON(url);
+  const quoteResponse = (payload.quoteResponse || {}) as JsonObject;
+  const result = (quoteResponse.result || []) as JsonArray;
+  return result;
+}
 
 async function fetchQuote(
   params: Record<string, string>
 ): Promise<{ data: unknown[]; raw: unknown }> {
-  const symbols = (params.symbols || "AAPL")
-    .split(",")
-    .map((s) => s.trim().toUpperCase());
+  const symbols = normalizeSymbols(params.symbols || "AAPL");
+  const rows = await fetchQuoteRows(symbols);
 
-  const results = await Promise.all(
-    symbols.map((sym) => yf.quote(sym))
-  );
-
-  const raw = results;
-  const data = results.map((q: Record<string, unknown>) => ({
+  const raw = rows;
+  const data = rows.map((q) => ({
     symbol: q.symbol,
     shortName: q.shortName,
     longName: q.longName,
@@ -171,23 +203,25 @@ async function fetchSummary(
   params: Record<string, string>
 ): Promise<{ data: unknown[]; raw: unknown }> {
   const symbol = (params.symbol || "AAPL").toUpperCase();
+  const modules = [
+    "summaryProfile",
+    "summaryDetail",
+    "defaultKeyStatistics",
+    "financialData",
+    "earningsTrend",
+  ];
+  const url =
+    `${BASE_URL}/v10/finance/quoteSummary/${encodeURIComponent(symbol)}` +
+    `?modules=${encodeURIComponent(modules.join(","))}`;
+  const payload = await fetchJSON(url);
+  const quoteSummary = (payload.quoteSummary || {}) as JsonObject;
+  const results = (quoteSummary.result || []) as JsonArray;
+  const raw = results[0] || {};
 
-  const result = await yf.quoteSummary(symbol, {
-    modules: [
-      "summaryProfile",
-      "summaryDetail",
-      "defaultKeyStatistics",
-      "financialData",
-      "earningsTrend",
-    ],
-  });
-
-  const raw = result;
-
-  const profile = result.summaryProfile || ({} as Record<string, unknown>);
-  const detail = result.summaryDetail || ({} as Record<string, unknown>);
-  const stats = result.defaultKeyStatistics || ({} as Record<string, unknown>);
-  const financials = result.financialData || ({} as Record<string, unknown>);
+  const profile = ((raw as JsonObject).summaryProfile || {}) as JsonObject;
+  const detail = ((raw as JsonObject).summaryDetail || {}) as JsonObject;
+  const stats = ((raw as JsonObject).defaultKeyStatistics || {}) as JsonObject;
+  const financials = ((raw as JsonObject).financialData || {}) as JsonObject;
 
   const data = [
     {
@@ -227,10 +261,14 @@ async function fetchSearch(
   params: Record<string, string>
 ): Promise<{ data: unknown[]; raw: unknown }> {
   const query = params.query || "technology";
-  const result = await yf.search(query);
+  const url =
+    `${BASE_URL}/v1/finance/search?q=${encodeURIComponent(query)}` +
+    "&quotesCount=25&newsCount=0";
+  const result = await fetchJSON(url);
 
   const raw = result;
-  const data = (result.quotes || []).map((q: Record<string, unknown>) => ({
+  const quotes = (result.quotes || []) as JsonArray;
+  const data = quotes.map((q) => ({
     symbol: q.symbol,
     shortname: q.shortname,
     longname: q.longname,
@@ -247,32 +285,30 @@ async function fetchSearch(
 async function fetchTrending(
   params: Record<string, string>
 ): Promise<{ data: unknown[]; raw: unknown }> {
-  const region = params.region || "US";
-  const result = await yf.trendingSymbols(region);
-
+  const region = (params.region || "US").toUpperCase();
+  const url = `${BASE_URL}/v1/finance/trending/${encodeURIComponent(region)}`;
+  const result = await fetchJSON(url);
   const raw = result;
-  const symbols = result.quotes || [];
 
-  // Fetch quotes for trending symbols to get meaningful data
-  const top = symbols.slice(0, 20);
-  const quotes = await Promise.all(
-    top.map(async (item: Record<string, unknown>) => {
-      try {
-        const q = await yf.quote(item.symbol as string);
-        return {
-          symbol: q.symbol,
-          shortName: q.shortName,
-          regularMarketPrice: q.regularMarketPrice,
-          regularMarketChangePercent: q.regularMarketChangePercent,
-          marketCap: q.marketCap,
-        };
-      } catch {
-        return { symbol: item.symbol };
-      }
-    })
-  );
+  const finance = (result.finance || {}) as JsonObject;
+  const topGroups = (finance.result || []) as JsonArray;
+  const firstGroup = (topGroups[0] || {}) as JsonObject;
+  const quotes = (firstGroup.quotes || []) as JsonArray;
+  const symbols = quotes
+    .map((item) => String(item.symbol || "").toUpperCase())
+    .filter(Boolean)
+    .slice(0, 20);
 
-  return { data: quotes, raw };
+  const detailed = await fetchQuoteRows(symbols);
+  const data = detailed.map((q) => ({
+    symbol: q.symbol,
+    shortName: q.shortName,
+    regularMarketPrice: q.regularMarketPrice,
+    regularMarketChangePercent: q.regularMarketChangePercent,
+    marketCap: q.marketCap,
+  }));
+
+  return { data, raw };
 }
 
 // ── Main ────────────────────────────────────────────────────────

@@ -49,6 +49,43 @@ func TestExecuteRejectsInvalidProtocolResponse(t *testing.T) {
 	}
 }
 
+func TestExecuteDoesNotLeakUnrelatedEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SECRET_TOKEN", "top-secret-value")
+
+	path := ConnectorPath("demo")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir connectors dir: %v", err)
+	}
+
+	script := `#!/bin/sh
+if [ -n "$SECRET_TOKEN" ]; then
+cat <<'EOF'
+{"data":[],"meta":{"source":"test","connector_version":"1.0.0","schema":"demo.v1","fetched_at":"2026-02-24T00:00:00Z","request_id":"req-leak"},"errors":[{"code":"execution_error","message":"secret leaked"}]}
+EOF
+exit 1
+fi
+cat <<'EOF'
+{"data":[{"ok":true}],"meta":{"source":"test","connector_version":"1.0.0","schema":"demo.v1","fetched_at":"2026-02-24T00:00:00Z","request_id":"req-safe"},"errors":[]}
+EOF
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write connector script: %v", err)
+	}
+
+	resp, err := Execute(protocol.Request{
+		Connector: "demo",
+		Resource:  "list",
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if resp.Meta.RequestID != "req-safe" {
+		t.Fatalf("unexpected request_id %q", resp.Meta.RequestID)
+	}
+}
+
 func writeTestConnector(t *testing.T, name, output string) {
 	t.Helper()
 

@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/oseaitic/harbor/internal/harborhome"
 	"github.com/oseaitic/harbor/internal/protocol"
 )
 
@@ -16,7 +19,10 @@ import (
 // The connector binary receives resource and params as CLI args.
 // Auth is injected via the HARBOR_AUTH environment variable (never CLI args).
 func Execute(req protocol.Request) (*protocol.Response, error) {
-	binPath := ConnectorPath(req.Connector)
+	binPath, err := SafeConnectorPath(req.Connector)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check connector exists
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
@@ -39,9 +45,19 @@ func Execute(req protocol.Request) (*protocol.Response, error) {
 	}
 
 	cmd := exec.Command(binPath, args...)
+	runtimeDir, err := connectorRuntimeDir(req.Connector)
+	if err != nil {
+		return nil, fmt.Errorf("preparing connector runtime dir: %w", err)
+	}
+	cmd.Dir = runtimeDir
 
-	// Inject auth via env var — never pass secrets as CLI args
-	cmd.Env = append(os.Environ(), fmt.Sprintf("HARBOR_AUTH=%s", req.Auth))
+	// Run connectors with a minimal environment to reduce accidental secret leakage.
+	env, err := connectorEnv(req.Auth)
+	if err != nil {
+		return nil, fmt.Errorf("preparing connector environment: %w", err)
+	}
+	cmd.Env = env
+	cmd.Stdin = bytes.NewReader(nil)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -143,4 +159,62 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func connectorRuntimeDir(name string) (string, error) {
+	dir := harborhome.Path("runtime", "workdir", name)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	return abs, nil
+}
+
+func connectorEnv(auth string) ([]string, error) {
+	runtimeHome := harborhome.Path("runtime", "home")
+	runtimeTmp := harborhome.Path("runtime", "tmp")
+	if err := os.MkdirAll(runtimeHome, 0o700); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(runtimeTmp, 0o700); err != nil {
+		return nil, err
+	}
+
+	env := []string{
+		"HARBOR_AUTH=" + auth,
+		"HOME=" + runtimeHome,
+		"TMPDIR=" + runtimeTmp,
+	}
+
+	if path := os.Getenv("PATH"); strings.TrimSpace(path) != "" {
+		env = append(env, "PATH="+path)
+	}
+
+	// Allow network + TLS behavior required by many connectors while blocking
+	// unrelated environment leakage.
+	passThrough := []string{
+		"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+		"http_proxy", "https_proxy", "no_proxy",
+		"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS",
+		"LANG", "LC_ALL", "TZ",
+	}
+	for _, key := range passThrough {
+		if val := os.Getenv(key); val != "" {
+			env = append(env, key+"="+val)
+		}
+	}
+
+	// Preserve Harbor-scoped controls (except auth, which we set explicitly).
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "HARBOR_") || strings.HasPrefix(kv, "HARBOR_AUTH=") {
+			continue
+		}
+		env = append(env, kv)
+	}
+
+	sort.Strings(env)
+	return env, nil
 }

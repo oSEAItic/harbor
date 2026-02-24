@@ -39,8 +39,7 @@ connector-bundle:
 		--bundle --platform=node --target=node18 --format=cjs \
 		--outfile=connectors/yahoo/dist/yahoo.js \
 		--banner:js='#!/usr/bin/env node' \
-		--alias:harbor-sdk=./sdk/typescript/src/index.ts \
-		--external:yahoo-finance2
+		--alias:harbor-sdk=./sdk/typescript/src/index.ts
 
 # ── All ──────────────────────────────────────────────────────────
 

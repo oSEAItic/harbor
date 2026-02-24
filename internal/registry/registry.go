@@ -6,15 +6,22 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/oseaitic/harbor/internal/connector"
 )
 
+type InstallOptions struct {
+	ExpectedSHA256 string
+}
+
 // Install looks up a connector in the embedded catalog, checks prerequisites,
 // downloads the bundle, and installs it to HARBOR_HOME/connectors/{name}
 // (or ~/.harbor/connectors/{name}).
-func Install(name string) error {
+func Install(name string, opts InstallOptions) error {
+	if err := connector.ValidateConnectorName(name); err != nil {
+		return err
+	}
+
 	entry := LookupCatalog(name)
 	if entry == nil {
 		available := ListCatalog()
@@ -49,16 +56,37 @@ func Install(name string) error {
 		return fmt.Errorf("reading download: %w", err)
 	}
 
+	expected := opts.ExpectedSHA256
+	if expected == "" {
+		expected = entry.SHA256
+	}
+
+	actual, err := verifyAndPinChecksum(name, body, expected)
+	if err != nil {
+		return fmt.Errorf("verifying connector checksum: %w", err)
+	}
+	fmt.Printf("  checksum: %s\n", actual)
+
 	return writeConnector(name, body)
 }
 
 // InstallFromLocal copies a local bundle file into the connectors directory.
 // This is used for local development via `harbor install --from <path>`.
-func InstallFromLocal(name, path string) error {
+func InstallFromLocal(name, path string, opts InstallOptions) error {
+	if err := connector.ValidateConnectorName(name); err != nil {
+		return err
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("reading local bundle %q: %w", path, err)
 	}
+
+	actual, err := verifyAndPinChecksum(name, data, opts.ExpectedSHA256)
+	if err != nil {
+		return fmt.Errorf("verifying connector checksum: %w", err)
+	}
+	fmt.Printf("  checksum: %s\n", actual)
 
 	return writeConnector(name, data)
 }
@@ -70,7 +98,10 @@ func writeConnector(name string, data []byte) error {
 		return fmt.Errorf("creating connectors dir: %w", err)
 	}
 
-	destPath := filepath.Join(dir, name)
+	destPath, err := connector.SafeConnectorPath(name)
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(destPath, data, 0o755); err != nil {
 		return fmt.Errorf("writing connector file: %w", err)
 	}
@@ -86,7 +117,10 @@ func writeConnector(name string, data []byte) error {
 
 // Uninstall removes an installed connector.
 func Uninstall(name string) error {
-	path := connector.ConnectorPath(name)
+	path, err := connector.SafeConnectorPath(name)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("connector %q is not installed", name)
 	}

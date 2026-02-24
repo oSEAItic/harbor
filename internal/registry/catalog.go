@@ -8,6 +8,7 @@ type CatalogEntry struct {
 	Description string   `json:"description"`
 	Runtime     string   `json:"runtime"` // "node", "python", "binary"
 	DownloadURL string   `json:"download_url"`
+	SHA256      string   `json:"sha256,omitempty"`
 	Schemas     []string `json:"schemas"`
 }
 

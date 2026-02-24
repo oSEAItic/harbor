@@ -90,10 +90,22 @@ func getConnectorSchemas(name string) ([]protocol.ToolSchema, error) {
 		return cached, nil
 	}
 
-	binPath := ConnectorPath(name)
+	binPath, err := SafeConnectorPath(name)
+	if err != nil {
+		return nil, err
+	}
 
 	cmd := exec.Command(binPath, "--describe")
-	cmd.Env = os.Environ()
+	env, err := connectorEnv("")
+	if err != nil {
+		return nil, err
+	}
+	cmd.Env = env
+	runtimeDir, err := connectorRuntimeDir(name)
+	if err != nil {
+		return nil, err
+	}
+	cmd.Dir = runtimeDir
 
 	out, err := cmd.Output()
 	if err != nil {

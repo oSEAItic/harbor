@@ -9,6 +9,7 @@ import (
 
 func newInstallCmd() *cobra.Command {
 	var fromPath string
+	var checksum string
 
 	cmd := &cobra.Command{
 		Use:   "install <connector>",
@@ -21,9 +22,13 @@ func newInstallCmd() *cobra.Command {
 			var err error
 			if fromPath != "" {
 				fmt.Printf("  source: %s (local)\n", fromPath)
-				err = registry.InstallFromLocal(name, fromPath)
+				err = registry.InstallFromLocal(name, fromPath, registry.InstallOptions{
+					ExpectedSHA256: checksum,
+				})
 			} else {
-				err = registry.Install(name)
+				err = registry.Install(name, registry.InstallOptions{
+					ExpectedSHA256: checksum,
+				})
 			}
 			if err != nil {
 				return fmt.Errorf("install %s: %w", name, err)
@@ -35,6 +40,7 @@ func newInstallCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&fromPath, "from", "", "Install from a local bundle file instead of downloading")
+	cmd.Flags().StringVar(&checksum, "sha256", "", "Expected SHA-256 for the connector bundle (hex)")
 
 	return cmd
 }

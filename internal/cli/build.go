@@ -33,7 +33,7 @@ a bundled JavaScript file to connectors/<name>/dist/<name>.js.
 Examples:
   harbor build newsapi
   harbor build newsapi --install
-  harbor build yahoo --external yahoo-finance2`,
+  harbor build postgresql --external pg`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -114,7 +114,7 @@ Examples:
 			// Step 4: Install if requested
 			if install {
 				fmt.Fprintf(cmd.OutOrStdout(), "Installing %s...\n", name)
-				if err := registry.InstallFromLocal(name, outFile); err != nil {
+				if err := registry.InstallFromLocal(name, outFile, registry.InstallOptions{}); err != nil {
 					return fmt.Errorf("installing %s: %w", name, err)
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Done! Try: harbor get %s.<resource>\n", name)

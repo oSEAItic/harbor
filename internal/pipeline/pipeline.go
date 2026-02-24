@@ -173,5 +173,8 @@ func ParseConnectorResource(arg string) (connectorName, resource string, err err
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("resource must be in format <connector>.<resource>, got %q", arg)
 	}
+	if err := connector.ValidateConnectorName(parts[0]); err != nil {
+		return "", "", err
+	}
 	return parts[0], parts[1], nil
 }

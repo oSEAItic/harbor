@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/oseaitic/harbor/internal/protocol"
+	"github.com/oseaitic/harbor/internal/tooling"
 )
 
 // schemaCache caches connector tool schemas per process lifetime.
@@ -38,6 +39,25 @@ func ExportToolSchemas() ([]protocol.ToolSchema, error) {
 	return schemas, nil
 }
 
+// ExportToolIR exports all installed connector tools in Harbor's canonical Tool IR.
+func ExportToolIR() ([]tooling.ToolIR, error) {
+	schemas, err := ExportToolSchemas()
+	if err != nil {
+		return nil, err
+	}
+	return tooling.FromOpenAISchemas(schemas), nil
+}
+
+// ExportMCPToolSchemas exports all installed connector tools as MCP-compatible
+// JSON tool definitions.
+func ExportMCPToolSchemas() ([]tooling.MCPTool, error) {
+	ir, err := ExportToolIR()
+	if err != nil {
+		return nil, err
+	}
+	return tooling.ToMCPSchemas(ir), nil
+}
+
 // GetResourceSchema returns the ToolFunction for a specific connector resource.
 // Results are cached per process lifetime.
 func GetResourceSchema(connectorName, resource string) (*protocol.ToolFunction, error) {
@@ -54,6 +74,11 @@ func GetResourceSchema(connectorName, resource string) (*protocol.ToolFunction, 
 	}
 
 	return nil, fmt.Errorf("resource %q not found in connector %q schema", resource, connectorName)
+}
+
+// ExportConnectorToolSchemas exports tool schemas for a single connector.
+func ExportConnectorToolSchemas(name string) ([]protocol.ToolSchema, error) {
+	return getConnectorSchemas(name)
 }
 
 // getConnectorSchemas fetches and caches tool schemas for a connector.

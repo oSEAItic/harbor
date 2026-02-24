@@ -94,9 +94,10 @@ This is context engineering at the protocol level. The agent spends zero tokens 
 
 ```bash
 harbor tools export
+harbor tools export --format mcp
 ```
 
-Emits an array of OpenAI-compatible function schemas — one per resource, per connector. Drop it into any function-calling agent and the model instantly knows what data sources exist, what parameters they accept, and what they return. No manual tool definitions. No drift between docs and reality.
+Emits tool schemas from Harbor's internal Tool IR. OpenAI function-calling and MCP formats are supported (`--format openai|mcp`) — one resource per connector tool. Drop it into any function-calling agent and the model instantly knows what data sources exist, what parameters they accept, and what they return. No manual tool definitions. No drift between docs and reality.
 
 ```json
 [
@@ -131,6 +132,12 @@ make build
 ./bin/harbor version
 ```
 
+Optional: override Harbor's local data path (connectors, memory, schemas, metrics):
+
+```bash
+export HARBOR_HOME="$PWD/.harbor"
+```
+
 ## Quick Start
 
 ```bash
@@ -142,6 +149,7 @@ harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 
 # Export tool schemas — drop directly into your agent's function calling
 harbor tools export
+harbor tools export --format openai --with-examples
 
 # Configure auth for premium connectors
 harbor auth stripe
@@ -152,11 +160,26 @@ harbor raw coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 # List all installed + available connectors
 harbor list
 
+# Machine-readable capability discovery for agents
+harbor capabilities --json
+harbor doctor --json
+harbor agent bootstrap --json
+
 # Recall data from memory
 harbor recall coingecko.prices --layer summary
 harbor recall --list
 harbor recall --search "bitcoin"
 ```
+
+## Agent Bootstrap (No Repo Context Required)
+
+For agents that only have CLI access (no source tree/docs), use:
+
+```bash
+harbor agent bootstrap --json
+```
+
+This returns command templates, installed connector/resource capabilities, example invocations, common error recovery hints, and environment diagnostics in one payload.
 
 ## MCP Proxy — Wrap Any MCP Server
 

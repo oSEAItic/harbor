@@ -94,9 +94,10 @@ Agent 收到这些数据后必须：
 
 ```bash
 harbor tools export
+harbor tools export --format mcp
 ```
 
-输出一个 OpenAI 兼容的函数 Schema 数组 —— 每个连接器的每个资源一个。把它传入任何支持函数调用的 Agent，模型立刻知道有哪些数据源可用、接受什么参数、返回什么结果。无需手动编写工具定义。文档和实际能力永远不会不同步。
+基于 Harbor 内部 Tool IR 导出工具 Schema。支持 OpenAI 与 MCP 两种格式（`--format openai|mcp`）—— 每个连接器资源一个工具。把它传入任何支持函数调用的 Agent，模型立刻知道有哪些数据源可用、接受什么参数、返回什么结果。无需手动编写工具定义。文档和实际能力永远不会不同步。
 
 ```json
 [

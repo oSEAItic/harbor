@@ -18,11 +18,22 @@ type Result struct {
 	FromMem  bool
 }
 
+// ErrorMode controls whether pipeline errors are hard-fail or soft-degraded.
+type ErrorMode string
+
+const (
+	// ErrorModeSoft degrades to the normalized/raw response when compile validation fails.
+	ErrorModeSoft ErrorMode = "soft"
+	// ErrorModeHard returns an error immediately when compile validation fails.
+	ErrorModeHard ErrorMode = "hard"
+)
+
 // Options controls pipeline behaviour.
 type Options struct {
 	NoMemory bool
 	Refresh  bool
 	Compile  harborctx.CompileOptions
+	Errors   ErrorMode
 }
 
 // Execute runs the full fetch→compile→memory pipeline for a connector resource.
@@ -73,6 +84,19 @@ func Execute(connectorName, resource string, params map[string]string, summaryFi
 
 	// Compile the response
 	compiled := harborctx.Compile(resp, summaryFields, schema, opts.Compile)
+	if err := protocol.ValidateResponse(compiled); err != nil {
+		if opts.errorMode() == ErrorModeHard {
+			return nil, fmt.Errorf("compiled response validation failed: %w", err)
+		}
+
+		// Soft degrade to the normalized response to keep the tool call usable.
+		fallback := *resp
+		fallback.Errors = append(fallback.Errors, protocol.ErrorDetail{
+			Code:    protocol.ErrSchemaValidation,
+			Message: fmt.Sprintf("compile validation failed, served normalized data: %v", err),
+		})
+		compiled = &fallback
+	}
 
 	// Save to memory
 	var memID string
@@ -93,6 +117,13 @@ func Execute(connectorName, resource string, params map[string]string, summaryFi
 		MemoryID: memID,
 		FromMem:  false,
 	}, nil
+}
+
+func (o Options) errorMode() ErrorMode {
+	if o.Errors == "" {
+		return ErrorModeSoft
+	}
+	return o.Errors
 }
 
 // BuildMemoryObject constructs a 4-layer memory object from fetch results.

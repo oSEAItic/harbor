@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/oseaitic/harbor/internal/harborhome"
 )
 
 const (
@@ -25,14 +27,9 @@ type Store struct {
 	mu     sync.Mutex
 }
 
-// NewStore creates a memory store at ~/.harbor/memory/.
+// NewStore creates a memory store at HARBOR_HOME/memory (or ~/.harbor/memory).
 func NewStore() (*Store, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("finding home dir: %w", err)
-	}
-
-	return NewStoreAt(filepath.Join(home, ".harbor", "memory"))
+	return NewStoreAt(harborhome.Path("memory"))
 }
 
 // NewStoreAt creates a memory store at the given directory.

@@ -243,6 +243,15 @@ func TestLearnHandlerValidation(t *testing.T) {
 			},
 			want: "summary_template is required",
 		},
+		{
+			name: "too many summary_fields",
+			args: map[string]interface{}{
+				"tool_name":        "test",
+				"summary_fields":   []interface{}{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"},
+				"summary_template": "{a}",
+			},
+			want: "at most 16 fields",
+		},
 	}
 
 	for _, tt := range tests {
@@ -327,9 +336,12 @@ func TestCompressWithSchema(t *testing.T) {
 
 	input := `[{"name":"file.txt","size":1024,"type":"file","perms":"rw-"},{"name":"dir","size":4096,"type":"directory","perms":"rwx"}]`
 
-	compressed, summary, err := compressWithSchema(input, ls)
+	compressed, summary, stats, err := compressWithSchema(input, ls)
 	if err != nil {
 		t.Fatalf("compressWithSchema: %v", err)
+	}
+	if stats.Items != 2 {
+		t.Fatalf("stats.Items = %d, want 2", stats.Items)
 	}
 
 	var items []map[string]interface{}
@@ -373,9 +385,12 @@ func TestCompressWithSchemaSingleObject(t *testing.T) {
 
 	input := `{"name":"my-project","status":"active","id":42,"created":"2024-01-01"}`
 
-	compressed, summary, err := compressWithSchema(input, ls)
+	compressed, summary, stats, err := compressWithSchema(input, ls)
 	if err != nil {
 		t.Fatalf("compressWithSchema: %v", err)
+	}
+	if stats.FieldsMatched == 0 {
+		t.Fatal("expected at least one matched field")
 	}
 
 	var items []map[string]interface{}
@@ -393,5 +408,22 @@ func TestCompressWithSchemaSingleObject(t *testing.T) {
 
 	if summary != "my-project: active" {
 		t.Errorf("summary = %q, want %q", summary, "my-project: active")
+	}
+}
+
+func TestDetectSchemaDrift(t *testing.T) {
+	stats := compressionStats{
+		Items:           3,
+		FieldsRequested: 2,
+		FieldsMatched:   0,
+		RawBytes:        1000,
+		CompactBytes:    200,
+	}
+	drift, reason := detectSchemaDrift(stats)
+	if !drift {
+		t.Fatal("expected drift to be detected")
+	}
+	if reason == "" {
+		t.Fatal("expected drift reason")
 	}
 }

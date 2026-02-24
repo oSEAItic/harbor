@@ -12,7 +12,8 @@ import (
 )
 
 // Install looks up a connector in the embedded catalog, checks prerequisites,
-// downloads the bundle, and installs it to ~/.harbor/connectors/{name}.
+// downloads the bundle, and installs it to HARBOR_HOME/connectors/{name}
+// (or ~/.harbor/connectors/{name}).
 func Install(name string) error {
 	entry := LookupCatalog(name)
 	if entry == nil {

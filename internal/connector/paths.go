@@ -3,15 +3,13 @@ package connector
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/oseaitic/harbor/internal/harborhome"
 )
 
 // ConnectorsDir returns the path to the connectors directory.
 func ConnectorsDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".", ".harbor", "connectors")
-	}
-	return filepath.Join(home, ".harbor", "connectors")
+	return harborhome.Path("connectors")
 }
 
 // ConnectorPath returns the full path to a connector binary.

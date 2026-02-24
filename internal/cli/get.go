@@ -26,6 +26,7 @@ func newGetCmd(outputFormat string) *cobra.Command {
 		noMemory  bool
 		refresh   bool
 		layer     string
+		errors    string
 	)
 
 	cmd := &cobra.Command{
@@ -45,6 +46,7 @@ memory on subsequent calls within the TTL window.
   --no-memory      Skip saving to and reading from memory
   --refresh        Force fresh fetch (bypass memory)
   --layer          Layer to serve from memory (raw|normalized|compact|summary)
+  --errors         Error mode: soft (degrade) or hard (fail fast)
 
 Examples:
   harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
@@ -103,11 +105,15 @@ Examples:
 			if fields != "" {
 				opts.Fields = strings.Split(fields, ",")
 			}
+			if errors != string(pipeline.ErrorModeSoft) && errors != string(pipeline.ErrorModeHard) {
+				return fmt.Errorf("invalid --errors value %q, expected soft or hard", errors)
+			}
 
 			result, err := pipeline.Execute(connectorName, resource, paramMap, nil, pipeline.Options{
 				NoMemory: noMemory,
 				Refresh:  refresh,
 				Compile:  opts,
+				Errors:   pipeline.ErrorMode(errors),
 			})
 			if err != nil {
 				return err
@@ -134,6 +140,7 @@ Examples:
 	cmd.Flags().BoolVar(&noMemory, "no-memory", false, "Skip saving to and reading from memory")
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force fresh fetch (bypass memory)")
 	cmd.Flags().StringVar(&layer, "layer", "", "Layer to serve from memory (raw|normalized|compact|summary)")
+	cmd.Flags().StringVar(&errors, "errors", "soft", "Error mode: soft | hard")
 
 	return cmd
 }
@@ -149,11 +156,11 @@ func outputFromMemory(cmd *cobra.Command, obj *memory.Object, layerFlag string) 
 		Meta: protocol.Meta{
 			Source:           obj.Meta.Source,
 			ConnectorVersion: obj.Meta.ConnectorVersion,
-			Schema:          obj.Schema,
-			FetchedAt:       obj.CreatedAt,
-			RequestID:       obj.Meta.RequestID,
-			MemoryID:        obj.ID,
-			FromMemory:      true,
+			Schema:           obj.Schema,
+			FetchedAt:        obj.CreatedAt,
+			RequestID:        obj.Meta.RequestID,
+			MemoryID:         obj.ID,
+			FromMemory:       true,
 		},
 		Errors: []protocol.ErrorDetail{},
 	}

@@ -1,0 +1,22 @@
+{
+  "cases": [
+    {
+      "name": "public repos",
+      "resource": "repos",
+      "params": {
+        "owner": "octocat",
+        "per_page": "5"
+      }
+    },
+    {
+      "name": "public issues",
+      "resource": "issues",
+      "params": {
+        "owner": "octocat",
+        "repo": "Hello-World",
+        "state": "all",
+        "per_page": "5"
+      }
+    }
+  ]
+}

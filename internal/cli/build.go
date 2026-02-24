@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/oseaitic/harbor/internal/connector"
 	"github.com/oseaitic/harbor/internal/registry"
 	"github.com/spf13/cobra"
 )
@@ -104,7 +105,7 @@ Examples:
 
 			// Step 3: Validate --describe output
 			fmt.Fprintf(cmd.OutOrStdout(), "Validating connector...\n")
-			if err := validateConnector(outFile); err != nil {
+			if err := validateConnector(outFile, connectorDir); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: validation failed: %v\n", err)
 			} else {
 				fmt.Fprintf(cmd.OutOrStdout(), "Validation passed.\n")
@@ -130,7 +131,7 @@ Examples:
 }
 
 // validateConnector runs the built connector with --describe and checks the output.
-func validateConnector(binPath string) error {
+func validateConnector(binPath, connectorDir string) error {
 	cmd := exec.Command("node", binPath, "--describe")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -174,6 +175,18 @@ func validateConnector(binPath string) error {
 		}
 		if len(schema.Function.Parameters) == 0 {
 			return fmt.Errorf("schema[%d]: function.parameters is required", i)
+		}
+	}
+
+	// Optional contract suite for executable protocol checks.
+	contractPath := filepath.Join(connectorDir, "contract.tests.json")
+	if _, err := os.Stat(contractPath); err == nil {
+		suite, err := connector.LoadContractSuite(contractPath)
+		if err != nil {
+			return fmt.Errorf("loading contract suite: %w", err)
+		}
+		if err := connector.RunContractSuite(binPath, suite); err != nil {
+			return fmt.Errorf("running contract suite: %w", err)
 		}
 	}
 

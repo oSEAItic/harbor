@@ -232,6 +232,32 @@ After building, Harbor automatically validates the connector by:
 1. Running `<name> --describe`
 2. Checking the output is valid JSON
 3. Verifying each schema has required fields (name, description, parameters)
+4. If `contract.tests.json` exists, running executable contract cases and validating
+   each response against Harbor protocol (`meta.*`, `data`, etc.)
+
+### Optional contract test suite (`contract.tests.json`)
+
+Place this file in `connectors/<name>/contract.tests.json`:
+
+```json
+{
+  "cases": [
+    {
+      "name": "basic prices",
+      "resource": "prices",
+      "params": { "ids": "bitcoin", "vs_currencies": "usd" }
+    }
+  ]
+}
+```
+
+Each case runs:
+
+```bash
+node dist/<name>.js --resource <resource> --params '<json>'
+```
+
+and Harbor validates that the response conforms to protocol.
 
 You can also validate manually:
 ```bash

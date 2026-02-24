@@ -1,0 +1,29 @@
+[
+  {
+    "name": "github.issues",
+    "description": "List repository issues",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "repo"
+      ]
+    }
+  },
+  {
+    "name": "stripe.balance",
+    "description": "Get Stripe account balance",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+]

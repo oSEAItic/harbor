@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,7 +102,7 @@ func TestOverwrite(t *testing.T) {
 		ToolName:      "my_tool",
 		SummaryFields: []string{"a", "b", "c"},
 		LearnedAt:     time.Now(),
-		Version:       2,
+		Version:       1,
 	}
 	if err := store.Save(v2); err != nil {
 		t.Fatal(err)
@@ -116,6 +117,58 @@ func TestOverwrite(t *testing.T) {
 	}
 	if len(got.SummaryFields) != 3 {
 		t.Errorf("SummaryFields len = %d, want 3", len(got.SummaryFields))
+	}
+}
+
+func TestHistoryAndRollback(t *testing.T) {
+	store, err := NewStoreAt(filepath.Join(t.TempDir(), "schemas"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fields := range [][]string{
+		{"name", "size"},
+		{"name", "size", "type"},
+		{"name"},
+	} {
+		if err := store.Save(&LearnedSchema{
+			ToolName:      "fs.list",
+			SummaryFields: fields,
+			LearnedAt:     time.Now(),
+			Version:       1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h, err := store.History("fs.list")
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(h) != 3 {
+		t.Fatalf("history len = %d, want 3", len(h))
+	}
+	if h[0].Version != 1 || h[2].Version != 3 {
+		t.Fatalf("unexpected version range: first=%d last=%d", h[0].Version, h[2].Version)
+	}
+
+	rolled, err := store.Rollback("fs.list", 1)
+	if err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+	if rolled.Version != 4 {
+		t.Fatalf("rollback version = %d, want 4", rolled.Version)
+	}
+
+	current := store.Get("fs.list")
+	if current == nil {
+		t.Fatal("Get returned nil after rollback")
+	}
+	if current.Version != 4 {
+		t.Fatalf("current version = %d, want 4", current.Version)
+	}
+	if len(current.SummaryFields) != 2 {
+		t.Fatalf("rollback fields len = %d, want 2", len(current.SummaryFields))
 	}
 }
 
@@ -135,5 +188,38 @@ func TestCorruptedFile(t *testing.T) {
 	got := store.Get("broken_tool")
 	if got != nil {
 		t.Errorf("Get returned %+v for corrupted file, want nil", got)
+	}
+}
+
+func TestHistoryFallsBackToCurrentFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "schemas")
+	store, err := NewStoreAt(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	current := &LearnedSchema{
+		ToolName:      "legacy_tool",
+		SummaryFields: []string{"id"},
+		LearnedAt:     time.Now(),
+		Version:       3,
+	}
+	data, err := json.MarshalIndent(current, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "legacy_tool.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := store.History("legacy_tool")
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(h) != 1 {
+		t.Fatalf("history len = %d, want 1", len(h))
+	}
+	if h[0].Version != 3 {
+		t.Fatalf("history version = %d, want 3", h[0].Version)
 	}
 }

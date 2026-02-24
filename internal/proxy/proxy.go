@@ -20,6 +20,7 @@ type Config struct {
 	Args        []string
 	Version     string
 	SchemaStore *schema.Store
+	Metrics     *MetricsLogger
 }
 
 // Run starts the MCP proxy. It launches the upstream MCP server as a subprocess,
@@ -79,6 +80,11 @@ func Run(cfg Config) error {
 	var memStore *memory.Store
 	memStore, _ = memory.NewStore()
 
+	metrics := cfg.Metrics
+	if metrics == nil {
+		metrics, _ = NewMetricsLogger()
+	}
+
 	// Create Harbor's MCP server
 	s := server.NewMCPServer("harbor-proxy", cfg.Version)
 
@@ -89,6 +95,7 @@ func Run(cfg Config) error {
 			toolName:    tool.Name,
 			schemaStore: cfg.SchemaStore,
 			memStore:    memStore,
+			metrics:     metrics,
 		}
 
 		proxyTool := reRegisterTool(tool)

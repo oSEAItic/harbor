@@ -1,0 +1,41 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "github.issues",
+      "description": "List repository issues",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner",
+          "repo"
+        ]
+      },
+      "summary_fields": [
+        "id",
+        "title",
+        "state"
+      ],
+      "summary_template": "{id}: {title} ({state})"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "stripe.balance",
+      "description": "Get Stripe account balance",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+]

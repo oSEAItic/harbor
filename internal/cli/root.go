@@ -5,7 +5,11 @@ import (
 )
 
 // NewRootCmd creates the top-level harbor command.
-func NewRootCmd(version string) *cobra.Command {
+func NewRootCmd(version string, sourceDir ...string) *cobra.Command {
+	var srcDir string
+	if len(sourceDir) > 0 {
+		srcDir = sourceDir[0]
+	}
 	var outputFormat string
 
 	root := &cobra.Command{
@@ -14,7 +18,8 @@ func NewRootCmd(version string) *cobra.Command {
 		Long: `Harbor is a protocol-native CLI that standardizes access to external
 data sources via connectors. Connectors expose normalized JSON output
 with source provenance and schema versioning.`,
-		SilenceUsage: true,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			printBanner(version)
 			cmd.Help()
@@ -42,6 +47,7 @@ with source provenance and schema versioning.`,
 		newBuildCmd(),
 		newMCPCmd(version),
 		newProxyCmd(version),
+		newUpdateCmd(version, srcDir),
 	)
 
 	return root

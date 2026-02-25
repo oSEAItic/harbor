@@ -29,7 +29,12 @@ func newSchemaHistoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "history <tool_name>",
 		Short: "Show learned schema version history for a tool",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires a tool name, e.g.: harbor schema history list_issues")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			toolName := strings.TrimSpace(args[0])
 			store, err := schema.NewStore()
@@ -94,7 +99,12 @@ func newSchemaRollbackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rollback <tool_name>",
 		Short: "Rollback active schema for a tool to a previous version",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires a tool name, e.g.: harbor schema rollback list_issues")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			toolName := strings.TrimSpace(args[0])
 			store, err := schema.NewStore()

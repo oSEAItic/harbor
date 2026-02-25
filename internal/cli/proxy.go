@@ -47,7 +47,12 @@ Examples:
       }
     }
   }`,
-		Args:               cobra.MinimumNArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return fmt.Errorf("requires an upstream command, e.g.: harbor proxy npx @modelcontextprotocol/server-github")
+			}
+			return nil
+		},
 		DisableFlagParsing: true,
 		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {

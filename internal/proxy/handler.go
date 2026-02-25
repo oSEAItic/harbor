@@ -75,7 +75,10 @@ func (h *proxyHandler) handle(ctx context.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	// Compress if we have a learned schema
-	ls := h.schemaStore.Get(h.toolName)
+	var ls *schema.LearnedSchema
+	if h.schemaStore != nil {
+		ls = h.schemaStore.Get(h.toolName)
+	}
 	if ls != nil {
 		compressed, summary, stats, err := compressWithSchema(rawText, ls)
 		if err != nil {
@@ -93,8 +96,10 @@ func (h *proxyHandler) handle(ctx context.Context, req mcp.CallToolRequest) (*mc
 
 		if drift, reason := detectSchemaDrift(stats); drift {
 			fmt.Fprintf(os.Stderr, "harbor-proxy: schema drift for %s: %s\n", h.toolName, reason)
-			if _, rbErr := h.schemaStore.Rollback(h.toolName, 0); rbErr == nil {
-				fmt.Fprintf(os.Stderr, "harbor-proxy: rolled back schema for %s to previous version\n", h.toolName)
+			if h.schemaStore != nil {
+				if _, rbErr := h.schemaStore.Rollback(h.toolName, 0); rbErr == nil {
+					fmt.Fprintf(os.Stderr, "harbor-proxy: rolled back schema for %s to previous version\n", h.toolName)
+				}
 			}
 
 			h.saveToMemory(rawText, rawText, "", params)
@@ -157,6 +162,10 @@ func (h *proxyHandler) handle(ctx context.Context, req mcp.CallToolRequest) (*mc
 // re-compressed data so the agent doesn't need an extra tool call.
 func makeLearnHandler(store *schema.Store, memStore *memory.Store) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if store == nil {
+			return mcp.NewToolResultError("schema store not available — Harbor cannot learn schemas in this configuration"), nil
+		}
+
 		toolName, err := req.RequireString("tool_name")
 		if err != nil {
 			return mcp.NewToolResultError("tool_name is required"), nil

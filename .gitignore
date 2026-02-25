@@ -39,5 +39,10 @@ __pycache__/
 .gocache/
 tmp-harbor-check/
 
-# Local docs
+# Internal docs
 doc/
+
+# Go
+*.test
+cover.out
+coverage.html

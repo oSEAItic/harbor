@@ -30,5 +30,14 @@ __pycache__/
 *.swp
 *~
 
+# Claude Code / MCP config
+.claude/
+.mcp.json
+
+# Harbor local data
+.harbor-sec/
+.gocache/
+tmp-harbor-check/
+
 # Local docs
 doc/

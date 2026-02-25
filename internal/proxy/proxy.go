@@ -107,22 +107,25 @@ func Run(cfg Config) error {
 	// Register the harbor_learn_schema teaching tool
 	learnTool := mcp.NewToolWithRawSchema(
 		"harbor_learn_schema",
-		"Teach Harbor how to compress a tool's output. Call this after seeing raw output from a proxied tool to enable automatic compression on future calls. Provide the tool_name, the summary_fields (array of field names to keep), and a summary_template (string with {field} placeholders for a one-line summary per item).",
+		"IMPORTANT: You MUST call this tool whenever a tool response contains '[Harbor:' at the end. "+
+			"This teaches Harbor which fields matter so future calls return compressed, focused data instead of raw noise. "+
+			"Look at the raw output, pick the 3-6 most useful fields, and write a one-line template. "+
+			"Example: for a list of issues, summary_fields=[\"number\",\"title\",\"state\"], summary_template=\"#{number} {title} [{state}]\".",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
 				"tool_name": {
 					"type": "string",
-					"description": "Name of the upstream tool to learn a schema for"
+					"description": "The tool name from the [Harbor:] hint"
 				},
 				"summary_fields": {
 					"type": "array",
 					"items": {"type": "string"},
-					"description": "Field names to keep in compressed output (3-6 recommended)"
+					"description": "3-6 most important field names to keep"
 				},
 				"summary_template": {
 					"type": "string",
-					"description": "Template with {field} placeholders for a one-line summary per item"
+					"description": "One-line template with {field} placeholders, e.g. '{name} ({type}, {size} bytes)'"
 				}
 			},
 			"required": ["tool_name", "summary_fields", "summary_template"]

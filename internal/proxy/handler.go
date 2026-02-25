@@ -143,12 +143,8 @@ func (h *proxyHandler) handle(ctx context.Context, req mcp.CallToolRequest) (*mc
 		CompressionRatio: 1.0,
 	})
 
-	hint := fmt.Sprintf(
-		"\n\n[Harbor: No compression schema for %q. To enable compression, "+
-			"call harbor_learn_schema with tool_name=%q, summary_fields (the most important field names), "+
-			"and summary_template (a template with {field} placeholders).]",
-		h.toolName, h.toolName,
-	)
+	// Build a hint with auto-suggested fields if the output is JSON
+	hint := buildLearnHint(h.toolName, rawText)
 
 	return mcp.NewToolResultText(rawText + hint), nil
 }
@@ -396,4 +392,80 @@ func applyTemplate(tmpl string, item map[string]interface{}) string {
 		}
 	}
 	return result
+}
+
+// buildLearnHint generates a directive hint with auto-suggested fields when
+// the raw output is JSON. If the output is not JSON, returns a generic hint.
+func buildLearnHint(toolName, rawText string) string {
+	trimmed := strings.TrimSpace(rawText)
+
+	// Try to extract field names from JSON to suggest concrete fields
+	fields := detectTopFields(trimmed)
+	if len(fields) > 0 {
+		// Pick up to 5 fields, build a suggested call
+		if len(fields) > 5 {
+			fields = fields[:5]
+		}
+		fieldsJSON, _ := json.Marshal(fields)
+		tmplParts := make([]string, len(fields))
+		for i, f := range fields {
+			tmplParts[i] = "{" + f + "}"
+		}
+		tmpl := strings.Join(tmplParts, " | ")
+
+		return fmt.Sprintf(
+			"\n\n[Harbor: call harbor_learn_schema now to compress future responses. "+
+				"Suggested: tool_name=%q, summary_fields=%s, summary_template=%q. "+
+				"Adjust the fields and template based on what matters for your task.]",
+			toolName, string(fieldsJSON), tmpl,
+		)
+	}
+
+	// Non-JSON output — generic hint
+	return fmt.Sprintf(
+		"\n\n[Harbor: call harbor_learn_schema with tool_name=%q to compress future responses. "+
+			"Pick the most important field names as summary_fields and write a summary_template with {field} placeholders.]",
+		toolName,
+	)
+}
+
+// detectTopFields extracts top-level field names from a JSON object or the
+// first item of a JSON array. It returns short, likely-useful field names
+// (skipping URLs and deeply nested objects), sorted alphabetically.
+func detectTopFields(text string) []string {
+	var item map[string]interface{}
+
+	if strings.HasPrefix(text, "[") {
+		var arr []map[string]interface{}
+		if err := json.Unmarshal([]byte(text), &arr); err != nil || len(arr) == 0 {
+			return nil
+		}
+		item = arr[0]
+	} else if strings.HasPrefix(text, "{") {
+		if err := json.Unmarshal([]byte(text), &item); err != nil {
+			return nil
+		}
+	} else {
+		return nil
+	}
+
+	var fields []string
+	for k, v := range item {
+		// Skip fields that look like noise (URLs, internal IDs, nested objects)
+		if strings.HasSuffix(k, "_url") || strings.HasSuffix(k, "_urls") {
+			continue
+		}
+		// Skip deeply nested objects (likely metadata)
+		switch v.(type) {
+		case map[string]interface{}:
+			// Keep simple nested objects like "user", "labels" but skip if key suggests noise
+			if strings.Contains(k, "url") || strings.Contains(k, "reaction") {
+				continue
+			}
+		}
+		fields = append(fields, k)
+	}
+
+	sort.Strings(fields)
+	return fields
 }

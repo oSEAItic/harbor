@@ -57,7 +57,12 @@ Examples:
   harbor get coingecko.trending --full
   harbor get coingecko.trending --refresh
   harbor get coingecko.trending --no-memory`,
-		Args: cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires <connector.resource>, e.g.: harbor get coingecko.prices")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connectorName, resource, err := pipeline.ParseConnectorResource(args[0])
 			if err != nil {
@@ -189,7 +194,12 @@ func newRawCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "raw <connector.resource>",
 		Short: "Fetch raw API response from a connector",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires <connector.resource>, e.g.: harbor raw coingecko.prices")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connectorName, resource, err := pipeline.ParseConnectorResource(args[0])
 			if err != nil {

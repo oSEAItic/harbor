@@ -34,7 +34,12 @@ Examples:
   harbor build newsapi
   harbor build newsapi --install
   harbor build postgresql --external pg`,
-		Args: cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires a connector name, e.g.: harbor build newsapi")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 

@@ -1,6 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BINARY  := harbor
-GOFLAGS := -trimpath -ldflags "-s -w -X main.version=$(VERSION)"
+SRCDIR  := $(shell pwd)
+GOFLAGS := -trimpath -ldflags "-s -w -X main.version=$(VERSION) -X main.sourceDir=$(SRCDIR)"
 
 .PHONY: build clean test lint install gateway mcp sdk-build connector-build connector-bundle all dev-install
 

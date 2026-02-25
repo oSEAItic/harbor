@@ -14,7 +14,12 @@ func newInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install <connector>",
 		Short: "Install a connector from the catalog or a local bundle",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires a connector name, e.g.: harbor install coingecko")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			fmt.Printf("Installing connector: %s\n", name)
@@ -49,7 +54,12 @@ func newUninstallCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "uninstall <connector>",
 		Short: "Remove an installed connector",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires a connector name, e.g.: harbor uninstall coingecko")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			fmt.Printf("Uninstalling connector: %s\n", name)

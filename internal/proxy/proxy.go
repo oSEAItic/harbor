@@ -141,7 +141,7 @@ func Run(cfg Config) error {
 		}`),
 	)
 
-	s.AddTool(learnTool, makeLearnHandler(cfg.SchemaStore))
+	s.AddTool(learnTool, makeLearnHandler(cfg.SchemaStore, memStore))
 
 	// Register harbor_recall tool for cross-session memory access
 	s.AddTool(recall.ToolDefinition(), recall.MakeHandler(memStore))

@@ -214,7 +214,7 @@ func TestE2EFullProxyFlow(t *testing.T) {
 
 			// ── Step 2: Agent teaches schema ──
 			t.Log("Step 2: Agent calls harbor_learn_schema")
-			learnHandler := makeLearnHandler(schemaStore)
+			learnHandler := makeLearnHandler(schemaStore, memStore)
 
 			learnReq := mcp.CallToolRequest{}
 			learnReq.Params.Name = "harbor_learn_schema"
@@ -245,10 +245,16 @@ func TestE2EFullProxyFlow(t *testing.T) {
 				t.Fatalf("step 3: %v", err)
 			}
 			compressedText := extractTextContent(result3)
-			compressedBytes := len(compressedText)
 
-			// Should NOT contain learning hint
-			if strings.Contains(compressedText, "harbor_learn_schema") {
+			// Separate JSON from inventory hint
+			compressedJSON := compressedText
+			if idx := strings.Index(compressedText, "\n\n[Harbor:"); idx >= 0 {
+				compressedJSON = compressedText[:idx]
+			}
+			compressedBytes := len(compressedJSON)
+
+			// Should NOT contain learning hint (the first-time learn prompt)
+			if strings.Contains(compressedText, "call harbor_learn_schema now") {
 				t.Error("step 3: compressed result still contains learning hint")
 			}
 
@@ -266,8 +272,8 @@ func TestE2EFullProxyFlow(t *testing.T) {
 
 			// Verify correct fields
 			var items []map[string]interface{}
-			if err := json.Unmarshal([]byte(compressedText), &items); err != nil {
-				t.Fatalf("step 3: compressed not valid JSON: %v\nContent: %s", err, compressedText)
+			if err := json.Unmarshal([]byte(compressedJSON), &items); err != nil {
+				t.Fatalf("step 3: compressed not valid JSON: %v\nContent: %s", err, compressedJSON)
 			}
 
 			for i, item := range items {
@@ -541,4 +547,176 @@ func TestE2EMultiSourceRecall(t *testing.T) {
 
 	t.Logf("  GitHub raw: %d bytes", len(ghObj.Layers.Raw))
 	t.Logf("  Filesystem raw: %d bytes", len(fsObj.Layers.Raw))
+}
+
+// TestE2EFieldInventory tests that compressed output includes a field
+// inventory hint listing omitted fields.
+func TestE2EFieldInventory(t *testing.T) {
+	upstreamClient := setupRealisticUpstream(t, "list_issues", githubIssuesResponse)
+	defer upstreamClient.Close()
+
+	schemaStore, err := schema.NewStoreAt(filepath.Join(t.TempDir(), "schemas"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	memStore, err := memory.NewStoreAt(filepath.Join(t.TempDir(), "memory"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Teach a schema with only 3 fields
+	learnHandler := makeLearnHandler(schemaStore, memStore)
+	learnReq := mcp.CallToolRequest{}
+	learnReq.Params.Name = "harbor_learn_schema"
+	learnReq.Params.Arguments = map[string]interface{}{
+		"tool_name":        "list_issues",
+		"summary_fields":   []interface{}{"number", "title", "state"},
+		"summary_template": "#{number} {title} [{state}]",
+	}
+	if _, err := learnHandler(context.Background(), learnReq); err != nil {
+		t.Fatal(err)
+	}
+
+	// Call the tool — should get compressed output with inventory
+	h := &proxyHandler{
+		upstream:    upstreamClient,
+		toolName:    "list_issues",
+		schemaStore: schemaStore,
+		memStore:    memStore,
+		metrics:     &MetricsLogger{path: filepath.Join(t.TempDir(), "metrics", "m.jsonl")},
+	}
+
+	req := mcp.CallToolRequest{}
+	req.Params.Name = "list_issues"
+	req.Params.Arguments = map[string]interface{}{"state": "open"}
+
+	result, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := extractTextContent(result)
+
+	// The JSON portion (before the inventory hint) should not contain noise fields
+	jsonPart := text
+	if idx := strings.Index(text, "\n\n[Harbor:"); idx >= 0 {
+		jsonPart = text[:idx]
+	}
+	if strings.Contains(jsonPart, "events_url") {
+		t.Error("compressed JSON should not contain events_url")
+	}
+
+	// Should contain field inventory
+	if !strings.Contains(text, "[Harbor:") {
+		t.Error("missing field inventory hint")
+	}
+	if !strings.Contains(text, "fields shown") {
+		t.Error("inventory hint should mention fields shown")
+	}
+
+	// Should list some omitted fields
+	if !strings.Contains(text, "Omitted:") {
+		t.Error("inventory hint should list omitted fields")
+	}
+
+	// body and assignee should be in the omitted list
+	if !strings.Contains(text, "body") {
+		t.Error("omitted list should include 'body'")
+	}
+
+	t.Logf("Compressed output with inventory:\n%s", text)
+}
+
+// TestE2ERecompressOnLearn tests that harbor_learn_schema returns
+// re-compressed cached data when raw data is available in memory.
+func TestE2ERecompressOnLearn(t *testing.T) {
+	upstreamClient := setupRealisticUpstream(t, "list_issues", githubIssuesResponse)
+	defer upstreamClient.Close()
+
+	schemaStore, err := schema.NewStoreAt(filepath.Join(t.TempDir(), "schemas"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	memStore, err := memory.NewStoreAt(filepath.Join(t.TempDir(), "memory"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := &proxyHandler{
+		upstream:    upstreamClient,
+		toolName:    "list_issues",
+		schemaStore: schemaStore,
+		memStore:    memStore,
+		metrics:     &MetricsLogger{path: filepath.Join(t.TempDir(), "metrics", "m.jsonl")},
+	}
+
+	ctx := context.Background()
+
+	// Step 1: Call tool to populate memory with raw data (no schema yet)
+	req := mcp.CallToolRequest{}
+	req.Params.Name = "list_issues"
+	req.Params.Arguments = map[string]interface{}{"state": "open"}
+	_, err = h.handle(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Step 2: Teach schema — should return re-compressed cached data
+	learnHandler := makeLearnHandler(schemaStore, memStore)
+	learnReq := mcp.CallToolRequest{}
+	learnReq.Params.Name = "harbor_learn_schema"
+	learnReq.Params.Arguments = map[string]interface{}{
+		"tool_name":        "list_issues",
+		"summary_fields":   []interface{}{"number", "title", "state"},
+		"summary_template": "#{number} {title} [{state}]",
+	}
+	learnResult, err := learnHandler(ctx, learnReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	learnText := extractTextContent(learnResult)
+
+	// Should contain "Re-compressed"
+	if !strings.Contains(learnText, "Re-compressed") {
+		t.Errorf("learn response should contain re-compressed data, got: %s", learnText[:min(200, len(learnText))])
+	}
+
+	// Should contain actual compressed JSON
+	if !strings.Contains(learnText, `"number"`) || !strings.Contains(learnText, `"title"`) {
+		t.Error("re-compressed data should contain schema fields")
+	}
+
+	// Should NOT contain noise fields
+	if strings.Contains(learnText, "events_url") || strings.Contains(learnText, "repository_url") {
+		t.Error("re-compressed data should not contain noise fields")
+	}
+
+	t.Logf("Learn response with re-compressed data:\n%s", learnText[:min(500, len(learnText))])
+
+	// Step 3: Teach again with MORE fields — re-compressed should include the new field
+	learnReq2 := mcp.CallToolRequest{}
+	learnReq2.Params.Name = "harbor_learn_schema"
+	learnReq2.Params.Arguments = map[string]interface{}{
+		"tool_name":        "list_issues",
+		"summary_fields":   []interface{}{"number", "title", "state", "user", "assignee"},
+		"summary_template": "#{number} {title} [{state}] by {user} assigned to {assignee}",
+	}
+	learnResult2, err := learnHandler(ctx, learnReq2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	learnText2 := extractTextContent(learnResult2)
+
+	// Should now include the user and assignee fields
+	if !strings.Contains(learnText2, "alice") && !strings.Contains(learnText2, "charlie") && !strings.Contains(learnText2, "bob") {
+		t.Error("v2 re-compressed data should include flattened user names")
+	}
+
+	t.Logf("Learn v2 response:\n%s", learnText2[:min(500, len(learnText2))])
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

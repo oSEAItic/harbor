@@ -130,7 +130,9 @@ func (h *proxyHandler) handle(ctx context.Context, req mcp.CallToolRequest) (*mc
 			FieldHitRate:     stats.FieldHitRate(),
 			Items:            stats.Items,
 		})
-		return mcp.NewToolResultText(compressed), nil
+
+		inventory := buildFieldInventory(rawText, ls.SummaryFields)
+		return mcp.NewToolResultText(compressed + inventory), nil
 	}
 
 	// No schema — return raw with a hint for the agent to teach us
@@ -151,7 +153,9 @@ func (h *proxyHandler) handle(ctx context.Context, req mcp.CallToolRequest) (*mc
 
 // makeLearnHandler returns an MCP handler for the harbor_learn_schema tool.
 // The agent calls this to teach Harbor how to compress a specific tool's output.
-func makeLearnHandler(store *schema.Store) server.ToolHandlerFunc {
+// If memStore is non-nil and cached raw data exists, the response includes
+// re-compressed data so the agent doesn't need an extra tool call.
+func makeLearnHandler(store *schema.Store, memStore *memory.Store) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		toolName, err := req.RequireString("tool_name")
 		if err != nil {
@@ -211,11 +215,58 @@ func makeLearnHandler(store *schema.Store) server.ToolHandlerFunc {
 
 		fmt.Fprintf(os.Stderr, "harbor-proxy: agent taught schema for %q (version=%d, fields=%v)\n", toolName, version, fields)
 
+		// Try to re-compress cached raw data with the new schema
+		recompressed := recompressCached(memStore, toolName, ls)
+		if recompressed != "" {
+			fmt.Fprintf(os.Stderr, "harbor-proxy: re-compressed cached data for %q (%d bytes)\n", toolName, len(recompressed))
+			return mcp.NewToolResultText(fmt.Sprintf(
+				"Schema learned for %q (version %d, fields: %v). Re-compressed cached data:\n%s",
+				toolName, version, fields, recompressed,
+			)), nil
+		}
+
 		return mcp.NewToolResultText(fmt.Sprintf(
 			"Schema learned for %q (version %d). Future calls will be compressed to fields: %v",
 			toolName, version, fields,
 		)), nil
 	}
+}
+
+// recompressCached finds the most recent cached raw data for a tool and
+// re-compresses it with the given schema. Returns empty string if no cache.
+func recompressCached(memStore *memory.Store, toolName string, ls *schema.LearnedSchema) string {
+	if memStore == nil {
+		return ""
+	}
+
+	// Find the most recent entry for this tool regardless of params
+	entries := memStore.Query(memory.QueryOptions{
+		Connector: proxyConnectorName,
+		Resource:  toolName,
+		Limit:     1,
+	})
+	if len(entries) == 0 {
+		return ""
+	}
+
+	obj, err := memStore.Get(entries[0].ID)
+	if err != nil || len(obj.Layers.Raw) == 0 {
+		return ""
+	}
+
+	compressed, summary, _, err := compressWithSchema(string(obj.Layers.Raw), ls)
+	if err != nil {
+		return ""
+	}
+
+	// Update the cached object with new compression
+	obj.Layers.Compact = json.RawMessage(compressed)
+	obj.Layers.Summary = summary
+	if _, err := memStore.Save(obj); err != nil {
+		fmt.Fprintf(os.Stderr, "harbor-proxy: failed to update cache: %v\n", err)
+	}
+
+	return compressed
 }
 
 // saveToMemory persists a tool result to the 4-layer memory store.
@@ -478,6 +529,73 @@ func buildLearnHint(toolName, rawText string) string {
 			"Pick the most important field names as summary_fields and write a summary_template with {field} placeholders.]",
 		toolName,
 	)
+}
+
+// buildFieldInventory returns a hint listing fields that were omitted during
+// compression. This lets the agent know what additional data is available
+// so it can update the schema if needed, rather than giving confidently
+// wrong answers due to missing fields.
+func buildFieldInventory(rawText string, schemaFields []string) string {
+	allFields := detectAllFields(rawText)
+	if len(allFields) == 0 {
+		return ""
+	}
+
+	included := make(map[string]bool, len(schemaFields))
+	for _, f := range schemaFields {
+		included[f] = true
+	}
+
+	var omitted []string
+	for _, f := range allFields {
+		if !included[f] {
+			omitted = append(omitted, f)
+		}
+	}
+	if len(omitted) == 0 {
+		return ""
+	}
+
+	shown := omitted
+	more := ""
+	if len(shown) > 10 {
+		shown = shown[:10]
+		more = fmt.Sprintf(", +%d more", len(omitted)-10)
+	}
+
+	return fmt.Sprintf(
+		"\n\n[Harbor: %d/%d fields shown. Omitted: %s%s. "+
+			"To include omitted fields, call harbor_learn_schema with updated summary_fields.]",
+		len(schemaFields), len(allFields), strings.Join(shown, ", "), more,
+	)
+}
+
+// detectAllFields extracts all top-level field names from a JSON object or
+// the first item of a JSON array. Returns sorted field names.
+func detectAllFields(text string) []string {
+	trimmed := strings.TrimSpace(text)
+	var item map[string]interface{}
+
+	if strings.HasPrefix(trimmed, "[") {
+		var arr []map[string]interface{}
+		if err := json.Unmarshal([]byte(trimmed), &arr); err != nil || len(arr) == 0 {
+			return nil
+		}
+		item = arr[0]
+	} else if strings.HasPrefix(trimmed, "{") {
+		if err := json.Unmarshal([]byte(trimmed), &item); err != nil {
+			return nil
+		}
+	} else {
+		return nil
+	}
+
+	fields := make([]string, 0, len(item))
+	for k := range item {
+		fields = append(fields, k)
+	}
+	sort.Strings(fields)
+	return fields
 }
 
 // detectTopFields extracts top-level field names from a JSON object or the

@@ -114,7 +114,7 @@ func TestLearnHandlerAndCompression(t *testing.T) {
 	}
 
 	// Step 1: Agent calls harbor_learn_schema to teach Harbor
-	learnHandler := makeLearnHandler(schemaStore)
+	learnHandler := makeLearnHandler(schemaStore, nil)
 
 	learnReq := mcp.CallToolRequest{}
 	learnReq.Params.Name = "harbor_learn_schema"
@@ -163,20 +163,26 @@ func TestLearnHandlerAndCompression(t *testing.T) {
 
 	text := extractTextContent(result)
 
-	// Should NOT contain the hint anymore
-	if strings.Contains(text, "harbor_learn_schema") {
+	// Separate JSON from inventory hint
+	jsonText := text
+	if idx := strings.Index(text, "\n\n[Harbor:"); idx >= 0 {
+		jsonText = text[:idx]
+	}
+
+	// Should NOT contain the first-time learn hint
+	if strings.Contains(text, "call harbor_learn_schema now") {
 		t.Error("compressed result still contains learning hint")
 	}
 
 	// Compressed output should be shorter than raw
-	if len(text) >= len(sampleFiles) {
+	if len(jsonText) >= len(sampleFiles) {
 		t.Errorf("compressed (%d bytes) should be shorter than raw (%d bytes): %s",
-			len(text), len(sampleFiles), text)
+			len(jsonText), len(sampleFiles), jsonText)
 	}
 
 	// Verify only summary fields present
 	var items []map[string]interface{}
-	if err := json.Unmarshal([]byte(text), &items); err != nil {
+	if err := json.Unmarshal([]byte(jsonText), &items); err != nil {
 		t.Fatalf("compressed not valid JSON: %v", err)
 	}
 
@@ -203,7 +209,7 @@ func TestLearnHandlerValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := makeLearnHandler(schemaStore)
+	handler := makeLearnHandler(schemaStore, nil)
 
 	tests := []struct {
 		name string

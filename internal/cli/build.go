@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/oseaitic/harbor/internal/connector"
 	"github.com/oseaitic/harbor/internal/registry"
@@ -20,44 +21,32 @@ func newBuildCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "build <name>",
+		Use:   "build [name-or-path]",
 		Short: "Build a connector from source",
 		Long: `Build a connector by running npm install and esbuild bundle.
 
-Looks for source in connectors/<name>/src/index.ts and outputs
-a bundled JavaScript file to connectors/<name>/dist/<name>.js.
+With no arguments, builds the connector in the current directory.
+With a name, looks for connectors/<name>/.
+With a path (contains / or .), uses it directly.
 
   --install              Also install after building
   --external <pkg>       Mark npm packages as external in esbuild
 
 Examples:
-  harbor build newsapi
-  harbor build newsapi --install
-  harbor build postgresql --external pg`,
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return fmt.Errorf("requires a connector name, e.g.: harbor build newsapi")
-			}
-			return nil
-		},
+  harbor build                         Build current directory as connector
+  harbor build newsapi                 Build connectors/newsapi/
+  harbor build ./my-connector          Build from path
+  harbor build newsapi --install       Build and install`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := args[0]
-
-			cwd, err := os.Getwd()
+			connectorDir, name, err := resolveConnectorDir(args)
 			if err != nil {
-				return fmt.Errorf("getting working directory: %w", err)
-			}
-
-			connectorDir := filepath.Join(cwd, "connectors", name)
-
-			// Verify connector directory exists
-			if _, err := os.Stat(connectorDir); os.IsNotExist(err) {
-				return fmt.Errorf("connector directory not found: %s\nRun 'harbor scaffold %s' first", connectorDir, name)
+				return err
 			}
 
 			srcFile := filepath.Join(connectorDir, "src", "index.ts")
 			if _, err := os.Stat(srcFile); os.IsNotExist(err) {
-				return fmt.Errorf("source file not found: %s", srcFile)
+				return fmt.Errorf("source file not found: %s\nNot a Harbor connector directory?", srcFile)
 			}
 
 			distDir := filepath.Join(connectorDir, "dist")
@@ -129,6 +118,48 @@ Examples:
 	cmd.Flags().StringArrayVar(&external, "external", nil, "Mark npm packages as external in esbuild")
 
 	return cmd
+}
+
+// resolveConnectorDir figures out the connector directory from the build args.
+// No args: current directory must be a connector (has src/index.ts).
+// Path arg (contains / or .): use as-is.
+// Name arg: look for ./connectors/<name>/.
+func resolveConnectorDir(args []string) (connectorDir, name string, err error) {
+	if len(args) == 0 {
+		// No args: use current directory
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", "", fmt.Errorf("getting working directory: %w", err)
+		}
+		name = filepath.Base(cwd)
+		return cwd, name, nil
+	}
+
+	arg := args[0]
+
+	// If arg looks like a path, use it directly
+	if strings.Contains(arg, "/") || strings.Contains(arg, ".") {
+		absPath, err := filepath.Abs(arg)
+		if err != nil {
+			return "", "", fmt.Errorf("resolving path: %w", err)
+		}
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
+			return "", "", fmt.Errorf("directory not found: %s", absPath)
+		}
+		name = filepath.Base(absPath)
+		return absPath, name, nil
+	}
+
+	// Name: look for ./connectors/<name>/
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", "", fmt.Errorf("getting working directory: %w", err)
+	}
+	connectorDir = filepath.Join(cwd, "connectors", arg)
+	if _, err := os.Stat(connectorDir); os.IsNotExist(err) {
+		return "", "", fmt.Errorf("connector not found: %s\nRun 'harbor scaffold %s' or use 'harbor build' from the connector directory", connectorDir, arg)
+	}
+	return connectorDir, arg, nil
 }
 
 // validateConnector runs the built connector with --describe and checks the output.

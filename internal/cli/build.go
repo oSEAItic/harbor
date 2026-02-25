@@ -80,9 +80,6 @@ Examples:
 			// Step 2: esbuild bundle
 			fmt.Fprintf(cmd.OutOrStdout(), "Bundling with esbuild...\n")
 
-			// Find the SDK path relative to the connector
-			sdkPath := filepath.Join(cwd, "sdk", "typescript", "src", "index.ts")
-
 			esbuildArgs := []string{
 				srcFile,
 				"--bundle",
@@ -91,7 +88,6 @@ Examples:
 				"--format=cjs",
 				"--outfile=" + outFile,
 				"--banner:js=#!/usr/bin/env node",
-				"--alias:harbor-sdk=" + sdkPath,
 			}
 
 			for _, ext := range external {

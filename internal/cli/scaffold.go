@@ -38,7 +38,7 @@ API logic and resource handlers.
   Step 5:  harbor get <name>.<resource> --param key=value
            Test the connector end-to-end
 
-── SDK Imports (from "harbor-sdk") ─────────────────────────────
+── SDK Imports (from "@oseaitic/harbor-sdk") ───────────────────
 
   parseArgs        Parse CLI args into { resource, params, auth, raw }
   output           Write JSON response envelope to stdout

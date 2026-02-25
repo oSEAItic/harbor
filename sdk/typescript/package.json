@@ -1,13 +1,17 @@
 {
-  "name": "harbor-sdk",
+  "name": "@oseaitic/harbor-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for building Harbor connectors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {},
+  "files": ["dist", "src"],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "tsc"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": ["harbor", "connector", "api", "agent", "llm"],
   "license": "Apache-2.0",

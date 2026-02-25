@@ -13,7 +13,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "harbor-sdk": "file:../../sdk/typescript",
+    "@oseaitic/harbor-sdk": "^0.1.0",
     "yahoo-finance2": "^3.13.0"
   },
   "devDependencies": {

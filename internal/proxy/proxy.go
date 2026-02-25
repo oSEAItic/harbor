@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -62,9 +63,10 @@ func Run(cfg Config) error {
 		}()
 	}
 
-	ctx := context.Background()
+	// MCP handshake with upstream (30s timeout to avoid hanging on unresponsive servers)
+	initCtx, initCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer initCancel()
 
-	// MCP handshake with upstream
 	initReq := mcp.InitializeRequest{}
 	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initReq.Params.ClientInfo = mcp.Implementation{
@@ -72,26 +74,34 @@ func Run(cfg Config) error {
 		Version: cfg.Version,
 	}
 
-	_, err = upstream.Initialize(ctx, initReq)
+	_, err = upstream.Initialize(initCtx, initReq)
 	if err != nil {
-		return fmt.Errorf("upstream initialize: %w", err)
+		return fmt.Errorf("upstream initialize (is %q running?): %w", cfg.Command, err)
 	}
 
 	// Discover upstream tools
-	toolsResult, err := upstream.ListTools(ctx, mcp.ListToolsRequest{})
+	toolsResult, err := upstream.ListTools(initCtx, mcp.ListToolsRequest{})
 	if err != nil {
 		return fmt.Errorf("upstream list tools: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "harbor-proxy: discovered %d tools from upstream\n", len(toolsResult.Tools))
 
-	// Set up memory store (best-effort)
+	// Set up memory store (best-effort — proxy works without it)
 	var memStore *memory.Store
-	memStore, _ = memory.NewStore()
+	if ms, err := memory.NewStore(); err != nil {
+		fmt.Fprintf(os.Stderr, "harbor-proxy: memory disabled: %v\n", err)
+	} else {
+		memStore = ms
+	}
 
 	metrics := cfg.Metrics
 	if metrics == nil {
-		metrics, _ = NewMetricsLogger()
+		if m, err := NewMetricsLogger(); err != nil {
+			fmt.Fprintf(os.Stderr, "harbor-proxy: metrics disabled: %v\n", err)
+		} else {
+			metrics = m
+		}
 	}
 
 	// Create Harbor's MCP server

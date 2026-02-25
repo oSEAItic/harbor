@@ -39,6 +39,20 @@ type connectorCapability struct {
 	Errors    []string                      `json:"errors,omitempty"`
 }
 
+type connectorDevStep struct {
+	Step        int    `json:"step"`
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+type connectorDevGuide struct {
+	Workflow           []connectorDevStep `json:"workflow"`
+	SDKImports         []string           `json:"sdk_imports"`
+	BoilerplateExample string             `json:"boilerplate_example"`
+	ResponseFormat     string             `json:"response_format"`
+	Tips               []string           `json:"tips"`
+}
+
 type errorHint struct {
 	Code     protocol.ErrorCode `json:"code"`
 	Meaning  string             `json:"meaning"`
@@ -74,6 +88,7 @@ type capabilitiesReport struct {
 	InstallHints           []string              `json:"install_hints"`
 	CommandTemplates       []commandTemplate     `json:"command_templates"`
 	Connectors             []connectorCapability `json:"connectors"`
+	ConnectorDevelopment   connectorDevGuide     `json:"connector_development"`
 	CommonErrorRecovery    []errorHint           `json:"common_error_recovery"`
 	ResponseEnvelopeSchema map[string]any        `json:"response_envelope_schema"`
 }
@@ -101,6 +116,7 @@ func buildCapabilitiesReport(version string) capabilitiesReport {
 		},
 		CommandTemplates:       defaultCommandTemplates(),
 		Connectors:             collectConnectorCapabilities(installed),
+		ConnectorDevelopment:   defaultConnectorDevGuide(),
 		CommonErrorRecovery:    defaultErrorHints(),
 		ResponseEnvelopeSchema: responseEnvelopeSchemaExample(),
 	}
@@ -256,6 +272,66 @@ func defaultCommandTemplates() []commandTemplate {
 			Name:        "doctor",
 			Template:    "harbor doctor --json",
 			Description: "Run environment checks and return structured diagnostics",
+		},
+	}
+}
+
+func defaultConnectorDevGuide() connectorDevGuide {
+	return connectorDevGuide{
+		Workflow: []connectorDevStep{
+			{Step: 1, Command: "harbor scaffold <name>", Description: "Creates connectors/<name>/ with TypeScript boilerplate (src/index.ts, package.json, tsconfig.json)"},
+			{Step: 2, Command: "edit connectors/<name>/src/index.ts", Description: "Set BASE_URL, define toolSchemas array, implement async fetch handlers returning {data: T[], raw: unknown}"},
+			{Step: 3, Command: "harbor build <name>", Description: "Runs npm install + esbuild bundle + validates tool schemas via --describe"},
+			{Step: 4, Command: "harbor build <name> --install", Description: "Build and install the bundled connector to ~/.harbor/connectors/"},
+			{Step: 5, Command: "harbor get <name>.<resource>", Description: "Test the connector end-to-end"},
+		},
+		SDKImports: []string{
+			"parseArgs — parses CLI args into {resource, params, auth, raw}",
+			"output — writes JSON response envelope to stdout",
+			"buildMeta — creates metadata {source, connector_version, schema, fetched_at, request_id}",
+			"errorResponse — creates error envelope with code + message",
+			"handleDescribe — returns true and prints toolSchemas if --describe flag is set",
+			"execCLI — shell out to external CLIs (e.g. psql, curl) with timeout and JSON parsing",
+		},
+		BoilerplateExample: `import { parseArgs, output, buildMeta, errorResponse, handleDescribe, type HarborToolSchema } from "harbor-sdk";
+
+const toolSchemas: HarborToolSchema[] = [{
+  type: "function",
+  function: {
+    name: "myapi.items",
+    description: "Fetch items from MyAPI",
+    parameters: { type: "object", properties: { query: { type: "string", description: "Search query" } }, required: ["query"] },
+    summary_fields: ["id", "name", "status"],
+    summary_template: "{id}: {name} ({status})",
+  },
+}];
+
+async function fetchItems(params: Record<string, string>): Promise<{ data: unknown[]; raw: unknown }> {
+  const resp = await fetch("https://api.example.com/items?q=" + encodeURIComponent(params.query || ""));
+  if (!resp.ok) throw new Error("API error: " + resp.status);
+  const raw = await resp.json();
+  const data = (raw.items || []).map((item: any) => ({ id: item.id, name: item.name, status: item.status }));
+  return { data, raw };
+}
+
+async function main() {
+  if (handleDescribe(toolSchemas)) return;
+  const { resource, params } = parseArgs();
+  const handlers: Record<string, (p: Record<string, string>) => Promise<{ data: unknown[]; raw: unknown }>> = { items: fetchItems };
+  const handler = handlers[resource];
+  if (!handler) { output(errorResponse("myapi", "resource_not_found", "Unknown: " + resource)); process.exit(1); }
+  const { data, raw } = await handler(params);
+  output({ data, meta: buildMeta({ source: "myapi", connector_version: "0.1.0", schema: "myapi." + resource + ".v1" }), raw, errors: [] });
+}
+main();`,
+		ResponseFormat: `Connector stdout must be a JSON envelope: { "data": [...], "meta": { "source": "string", "connector_version": "string", "schema": "string", "fetched_at": "RFC3339", "request_id": "UUID" }, "errors": [], "raw": { ...original API response... } }`,
+		Tips: []string{
+			"Each resource handler must return {data: array, raw: original_response}",
+			"summary_fields defines which fields appear in compressed output — pick 3-6 most important",
+			"Use HARBOR_AUTH env var for API keys, set via: harbor auth <name>",
+			"harbor build validates schema format automatically — fix errors before installing",
+			"Connector is a single bundled .js file executed as: node <connector> --resource <name> --params <json>",
+			"Add contract.tests.json with test cases: {\"cases\": [{\"name\": \"...\", \"resource\": \"...\", \"params\": {...}}]}",
 		},
 	}
 }

@@ -14,6 +14,7 @@ func newAgentCmd(version string) *cobra.Command {
 	}
 
 	cmd.AddCommand(newAgentBootstrapCmd(version))
+	cmd.AddCommand(newCapabilitiesCmd(version))
 	return cmd
 }
 

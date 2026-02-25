@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/recall"
 	"github.com/oseaitic/harbor/internal/schema"
@@ -21,6 +23,7 @@ type Config struct {
 	Version     string
 	SchemaStore *schema.Store
 	Metrics     *MetricsLogger
+	Credentials map[string]string // env var name → keychain key name
 }
 
 // Run starts the MCP proxy. It launches the upstream MCP server as a subprocess,
@@ -28,10 +31,16 @@ type Config struct {
 // the agent over stdio. A harbor_learn_schema tool is also registered so the
 // agent can teach Harbor how to compress each tool's output.
 func Run(cfg Config) error {
+	// Build environment with credential injection from OS keychain
+	env, err := buildProxyEnv(cfg.Credentials)
+	if err != nil {
+		return fmt.Errorf("preparing proxy environment: %w", err)
+	}
+
 	// Launch upstream MCP server as subprocess
 	fmt.Fprintf(os.Stderr, "harbor-proxy: launching upstream %s %v\n", cfg.Command, cfg.Args)
 
-	upstream, err := client.NewStdioMCPClient(cfg.Command, os.Environ(), cfg.Args...)
+	upstream, err := client.NewStdioMCPClient(cfg.Command, env, cfg.Args...)
 	if err != nil {
 		return fmt.Errorf("launching upstream %q: %w", cfg.Command, err)
 	}
@@ -140,6 +149,48 @@ func Run(cfg Config) error {
 	// Serve to agent via stdio
 	fmt.Fprintf(os.Stderr, "harbor-proxy: serving %d upstream tools + harbor_learn_schema + harbor_recall to agent\n", len(toolsResult.Tools))
 	return server.ServeStdio(s)
+}
+
+// buildProxyEnv constructs the environment for the upstream MCP server process.
+// Without credentials, it passes through the current environment unchanged.
+// With credentials, it resolves each keychain key and injects/overrides the
+// corresponding environment variable — so API keys never appear in config files.
+func buildProxyEnv(credentials map[string]string) ([]string, error) {
+	env := os.Environ()
+	if len(credentials) == 0 {
+		return env, nil
+	}
+
+	// Resolve secrets from OS keychain
+	overrides := make(map[string]string, len(credentials))
+	for envVar, keychainKey := range credentials {
+		secret, err := auth.Retrieve(keychainKey)
+		if err != nil {
+			return nil, fmt.Errorf("credential %q (keychain key %q): %w", envVar, keychainKey, err)
+		}
+		overrides[envVar] = secret
+		fmt.Fprintf(os.Stderr, "harbor-proxy: injecting credential %s from keychain\n", envVar)
+	}
+
+	// Apply overrides: replace existing vars or append new ones
+	var result []string
+	seen := make(map[string]bool, len(overrides))
+	for _, kv := range env {
+		key := strings.SplitN(kv, "=", 2)[0]
+		if val, ok := overrides[key]; ok {
+			result = append(result, key+"="+val)
+			seen[key] = true
+		} else {
+			result = append(result, kv)
+		}
+	}
+	for key, val := range overrides {
+		if !seen[key] {
+			result = append(result, key+"="+val)
+		}
+	}
+
+	return result, nil
 }
 
 // reRegisterTool creates a new mcp.Tool from an upstream tool, preserving its schema.

@@ -365,14 +365,44 @@ func compressWithSchema(rawJSON string, ls *schema.LearnedSchema) (compressed st
 }
 
 // filterFields returns a new map containing only the specified fields.
+// Nested objects are flattened to a display value (e.g., user → user.login).
 func filterFields(item map[string]interface{}, fields []string) map[string]interface{} {
 	result := make(map[string]interface{}, len(fields))
 	for _, f := range fields {
-		if v, ok := item[f]; ok {
+		v, ok := item[f]
+		if !ok {
+			continue
+		}
+		// Flatten nested objects to their display value
+		if nested, isMap := v.(map[string]interface{}); isMap {
+			result[f] = flattenNestedObject(nested)
+		} else {
 			result[f] = v
 		}
 	}
 	return result
+}
+
+// flattenNestedObject extracts a display value from a nested object.
+// Tries common display fields (login, name, title, label, id) in priority order.
+func flattenNestedObject(obj map[string]interface{}) interface{} {
+	for _, key := range []string{"login", "name", "title", "label", "display_name", "full_name", "email", "slug"} {
+		if v, ok := obj[key]; ok {
+			if s, isStr := v.(string); isStr && s != "" {
+				return s
+			}
+		}
+	}
+	// Fallback: if there's an "id" field, use it
+	if id, ok := obj["id"]; ok {
+		return fmt.Sprintf("%v", id)
+	}
+	// Last resort: return JSON
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return fmt.Sprintf("%v", obj)
+	}
+	return string(b)
 }
 
 // applyTemplate replaces {field} placeholders in the template with values from the item.
@@ -388,10 +418,31 @@ func applyTemplate(tmpl string, item map[string]interface{}) string {
 	for _, k := range keys {
 		placeholder := "{" + k + "}"
 		if strings.Contains(result, placeholder) {
-			result = strings.ReplaceAll(result, placeholder, fmt.Sprintf("%v", item[k]))
+			result = strings.ReplaceAll(result, placeholder, formatValue(item[k]))
 		}
 	}
 	return result
+}
+
+// formatValue converts a value to a display string.
+// Nested maps are flattened; primitives use fmt.Sprintf.
+func formatValue(v interface{}) string {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		flat := flattenNestedObject(val)
+		return fmt.Sprintf("%v", flat)
+	case []interface{}:
+		if len(val) == 0 {
+			return "[]"
+		}
+		parts := make([]string, 0, len(val))
+		for _, item := range val {
+			parts = append(parts, formatValue(item))
+		}
+		return strings.Join(parts, ", ")
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // buildLearnHint generates a directive hint with auto-suggested fields when

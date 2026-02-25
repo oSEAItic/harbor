@@ -36,7 +36,7 @@ func Scaffold(name string, connectorDir string) error {
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "harbor-sdk": "file:../../sdk/typescript"
+    "@oseaitic/harbor-sdk": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
@@ -79,7 +79,7 @@ func Scaffold(name string, connectorDir string) error {
   errorResponse,
   handleDescribe,
   type HarborToolSchema,
-} from "harbor-sdk";
+} from "@oseaitic/harbor-sdk";
 
 const CONNECTOR_VERSION = "0.1.0";
 const SOURCE = "%s";

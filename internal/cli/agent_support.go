@@ -293,7 +293,7 @@ func defaultConnectorDevGuide() connectorDevGuide {
 			"handleDescribe — returns true and prints toolSchemas if --describe flag is set",
 			"execCLI — shell out to external CLIs (e.g. psql, curl) with timeout and JSON parsing",
 		},
-		BoilerplateExample: `import { parseArgs, output, buildMeta, errorResponse, handleDescribe, type HarborToolSchema } from "harbor-sdk";
+		BoilerplateExample: `import { parseArgs, output, buildMeta, errorResponse, handleDescribe, type HarborToolSchema } from "@oseaitic/harbor-sdk";
 
 const toolSchemas: HarborToolSchema[] = [{
   type: "function",

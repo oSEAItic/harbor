@@ -6,7 +6,7 @@ import {
   handleDescribe,
   execCLI,
   type HarborToolSchema,
-} from "harbor-sdk";
+} from "@oseaitic/harbor-sdk";
 
 const CONNECTOR_VERSION = "0.1.0";
 const SOURCE = "postgresql";

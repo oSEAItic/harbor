@@ -161,7 +161,9 @@ harbor recall --search "bitcoin"
 
 ## MCP Proxy — 包装任意 MCP 服务器
 
-Harbor 可以作为透明代理, 挡在任何现有 MCP 服务器 (Notion, GitHub, 文件系统, Slack 等) 前面。它会自动发现上游服务器的工具, 用学习到的 schema 压缩输出, 并将结果缓存到记忆层。Agent 配置只需改一行:
+Harbor 可以作为透明代理，挡在任何现有 MCP 服务器（Notion、GitHub、文件系统、Slack 等）前面。一行配置。无需 API Key。无需改代码。Harbor 自动发现上游服务器的工具，由 **Agent 自身** 教会 Harbor 如何压缩每个工具的输出。
+
+**Harbor 负责结构化。Agent 负责思考。**
 
 ```json
 {
@@ -174,10 +176,30 @@ Harbor 可以作为透明代理, 挡在任何现有 MCP 服务器 (Notion, GitHu
 }
 ```
 
-无需环境变量或 API Key。首次调用时, Harbor 直接透传原始输出并提示 Agent 调用 `harbor_learn_schema` 来教会压缩方式。之后所有调用自动压缩 — 永久生效。同一台机器上的所有 Agent 共享已学习的 schema。
+### Schema 学习的工作原理
+
+Harbor 内部不调用任何 LLM。连接到 Harbor 的 Agent **本身就是** LLM —— 它已经具备推理能力来判断哪些字段重要。学习流程如下：
+
+1. **首次调用** —— Harbor 代理工具调用并返回原始上游输出，附带一个提示：
+   ```
+   [Harbor: No compression schema for "list_files". Call harbor_learn_schema
+   with tool_name, summary_fields, and summary_template to enable compression.]
+   ```
+2. **Agent 教学** —— Agent 阅读原始输出，决定哪些字段重要，然后调用 `harbor_learn_schema`：
+   ```json
+   {
+     "tool_name": "list_files",
+     "summary_fields": ["name", "size", "type"],
+     "summary_template": "{name} ({type}, {size} bytes)"
+   }
+   ```
+3. **Schema 永久存储** —— 该工具的所有后续调用自动压缩。同一台机器上的所有 Agent 共享任何 Agent 教会的 schema。
+4. **漂移检测** —— 如果上游 API 变更了数据结构，Harbor 检测到字段命中率下降，自动回滚 schema，并请求 Agent 重新教学。
+
+这适用于任何 Agent —— Claude、GPT-4、Cursor、Copilot、本地模型 —— 因为提示是纯文本，任何 LLM 都能读取并据此行动。无需特殊集成。
 
 ```
-Agent (Claude/Cursor)
+Agent (Claude/Cursor/任意 LLM)
   ↓ MCP stdio
 Harbor Proxy (MCP Server)
   ├── schema 检查 → 有 schema 则压缩
@@ -187,6 +209,8 @@ Harbor Proxy (MCP Server)
   ↓ MCP stdio (client)
 Upstream MCP Server (任意)
 ```
+
+> **高级用法：** 如果是纯 CLI 工作流（没有 Agent 参与），可以选择设置 `HARBOR_LLM_API_KEY` 让 Harbor 通过外部 LLM API 自动学习 schema。详见 `internal/schema/llm.go` 的配置说明。这不是推荐路径 —— Agent 驱动的学习效果更好，因为 Agent 拥有任务上下文，而独立的 LLM 调用没有。
 
 ## MCP Server — 内置连接器的原生 MCP 支持
 

@@ -183,7 +183,9 @@ This returns command templates, installed connector/resource capabilities, examp
 
 ## MCP Proxy — Wrap Any MCP Server
 
-Harbor can act as a transparent proxy in front of any existing MCP server (Notion, GitHub, filesystem, Slack, etc.). It re-discovers the upstream server's tools, automatically compresses output with learned schemas, and caches results to memory. The agent config change is one line:
+Harbor can act as a transparent proxy in front of any existing MCP server (Notion, GitHub, filesystem, Slack, etc.). One config line. No API keys. No code changes. Harbor re-discovers the upstream server's tools, and the **agent itself** teaches Harbor how to compress each tool's output.
+
+**Harbor structures. The agent thinks.**
 
 ```json
 {
@@ -196,10 +198,30 @@ Harbor can act as a transparent proxy in front of any existing MCP server (Notio
 }
 ```
 
-No environment variables or API keys required. On first call, Harbor passes through raw output and prompts the agent to call `harbor_learn_schema` to teach compression. After that, all future calls are automatically compressed — permanently. Every agent on the machine benefits from schemas learned by any other agent.
+### How schema learning works
+
+Harbor never calls an LLM internally. The agent connected to Harbor **is** the LLM — it already has the reasoning ability to decide what fields matter. The learning flow is:
+
+1. **First call** — Harbor proxies the tool call and returns raw upstream output, appending a hint:
+   ```
+   [Harbor: No compression schema for "list_files". Call harbor_learn_schema
+   with tool_name, summary_fields, and summary_template to enable compression.]
+   ```
+2. **Agent teaches** — The agent reads the raw output, decides which fields are important, and calls `harbor_learn_schema`:
+   ```json
+   {
+     "tool_name": "list_files",
+     "summary_fields": ["name", "size", "type"],
+     "summary_template": "{name} ({type}, {size} bytes)"
+   }
+   ```
+3. **Schema stored permanently** — All future calls to that tool are automatically compressed. Every agent on the machine benefits from schemas any agent has taught.
+4. **Drift detection** — If the upstream API changes shape, Harbor detects field hit rate drops, rolls back the schema, and asks the agent to re-teach.
+
+This works with any agent — Claude, GPT-4, Cursor, Copilot, local models — because the hint is plain text that any LLM can read and act on. No special integration required.
 
 ```
-Agent (Claude/Cursor)
+Agent (Claude/Cursor/any LLM)
   ↓ MCP stdio
 Harbor Proxy (MCP Server)
   ├── schema check → compress if learned
@@ -209,6 +231,8 @@ Harbor Proxy (MCP Server)
   ↓ MCP stdio (client)
 Upstream MCP Server (any)
 ```
+
+> **Advanced:** For CLI-only workflows without an agent in the loop, you can optionally set `HARBOR_LLM_API_KEY` to let Harbor auto-learn schemas via an external LLM API. See `internal/schema/llm.go` for configuration. This is not the recommended path — agent-driven learning produces better schemas because the agent has task context that a standalone LLM call does not.
 
 ## MCP Server — Native MCP for Built-in Connectors
 

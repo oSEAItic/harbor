@@ -216,9 +216,36 @@ Harbor never calls an LLM internally. The agent connected to Harbor **is** the L
    }
    ```
 3. **Schema stored permanently** — All future calls to that tool are automatically compressed. Every agent on the machine benefits from schemas any agent has taught.
-4. **Drift detection** — If the upstream API changes shape, Harbor detects field hit rate drops, rolls back the schema, and asks the agent to re-teach.
+4. **Field inventory** — Compressed output lists omitted fields so the agent knows what data is available but hidden. The agent can update the schema if a task needs additional fields, preventing confidently wrong answers from missing data.
+5. **Drift detection** — If the upstream API changes shape, Harbor detects field hit rate drops, rolls back the schema, and asks the agent to re-teach.
 
 This works with any agent — Claude, GPT-4, Cursor, Copilot, local models — because the hint is plain text that any LLM can read and act on. No special integration required.
+
+### Credential injection
+
+Third-party MCP servers need API keys. Harbor can inject them from the OS keychain so secrets never appear in config files:
+
+```bash
+# Store API key in OS keychain
+harbor auth github-pat
+
+# Proxy reads from keychain and injects into the upstream server's environment
+harbor proxy --credential GITHUB_TOKEN=github-pat \
+  npx @modelcontextprotocol/server-github
+```
+
+In Claude Code / Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "harbor",
+      "args": ["proxy", "--credential", "GITHUB_TOKEN=github-pat",
+               "npx", "@modelcontextprotocol/server-github"]
+    }
+  }
+}
+```
 
 ```
 Agent (Claude/Cursor/any LLM)

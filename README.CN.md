@@ -194,9 +194,36 @@ Harbor 内部不调用任何 LLM。连接到 Harbor 的 Agent **本身就是** L
    }
    ```
 3. **Schema 永久存储** —— 该工具的所有后续调用自动压缩。同一台机器上的所有 Agent 共享任何 Agent 教会的 schema。
-4. **漂移检测** —— 如果上游 API 变更了数据结构，Harbor 检测到字段命中率下降，自动回滚 schema，并请求 Agent 重新教学。
+4. **字段清单** —— 压缩输出附带省略字段列表，Agent 知道哪些数据存在但被隐藏。如果某个任务需要额外字段，Agent 可以更新 schema，避免因缺失数据而给出自信但错误的答案。
+5. **漂移检测** —— 如果上游 API 变更了数据结构，Harbor 检测到字段命中率下降，自动回滚 schema，并请求 Agent 重新教学。
 
 这适用于任何 Agent —— Claude、GPT-4、Cursor、Copilot、本地模型 —— 因为提示是纯文本，任何 LLM 都能读取并据此行动。无需特殊集成。
+
+### 凭证注入
+
+第三方 MCP 服务器需要 API Key。Harbor 可以从操作系统钥匙串注入，密钥不会出现在配置文件中：
+
+```bash
+# 将 API Key 存入操作系统钥匙串
+harbor auth github-pat
+
+# Proxy 从钥匙串读取并注入到上游服务器的环境变量
+harbor proxy --credential GITHUB_TOKEN=github-pat \
+  npx @modelcontextprotocol/server-github
+```
+
+Claude Code / Claude Desktop 配置：
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "harbor",
+      "args": ["proxy", "--credential", "GITHUB_TOKEN=github-pat",
+               "npx", "@modelcontextprotocol/server-github"]
+    }
+  }
+}
+```
 
 ```
 Agent (Claude/Cursor/任意 LLM)

@@ -40,10 +40,16 @@ func newListCmd() *cobra.Command {
 			fmt.Println()
 			fmt.Println("  * = installed")
 
-			// Show any installed connectors not in catalog
+			// Show installed connectors not in catalog — introspect via --describe
 			for _, name := range installed {
 				if registry.LookupCatalog(name) == nil {
-					fmt.Printf("  (unknown) %s\n", name)
+					schemas, err := connector.ExportConnectorToolSchemas(name)
+					if err == nil && len(schemas) > 0 {
+						desc := schemas[0].Function.Description
+						fmt.Printf("  * %-12s  %s  (local)\n", name, desc)
+					} else {
+						fmt.Printf("  * %-12s  (no description)  (local)\n", name)
+					}
 				}
 			}
 

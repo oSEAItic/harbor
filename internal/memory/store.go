@@ -49,7 +49,7 @@ func (s *Store) Save(obj *Object) (string, error) {
 
 	// Generate ID
 	obj.ID = generateID(obj.Connector, obj.Resource, obj.Params)
-	obj.CreatedAt = time.Now()
+	obj.CreatedAt = time.Now().UTC()
 
 	// Compute content hash
 	hash := sha256.Sum256(obj.Layers.Normalized)

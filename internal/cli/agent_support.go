@@ -332,6 +332,7 @@ main();`,
 			"harbor build validates schema format automatically — fix errors before installing",
 			"Connector is a single bundled .js file executed as: node <connector> --resource <name> --params <json>",
 			"Add contract.tests.json with test cases: {\"cases\": [{\"name\": \"...\", \"resource\": \"...\", \"params\": {...}}]}",
+			"Always set 'required' array and 'description' on each parameter — this enables CLI features like positional args (harbor get x.y <value>) and missing-param error hints",
 		},
 	}
 }

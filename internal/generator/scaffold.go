@@ -96,9 +96,11 @@ const toolSchemas: HarborToolSchema[] = [
       parameters: {
         type: "object",
         properties: {
-          // TODO: Define your parameters
-          // id: { type: "string", description: "The item ID" },
+          // TODO: Define your parameters with descriptions
+          // id: { type: "string", description: "The unique item identifier" },
         },
+        // IMPORTANT: List required params here — enables CLI positional shorthand
+        // e.g. required: ["id"] lets users run: harbor get myapi.items <id>
         required: [],
       },
       summary_fields: [],      // TODO: Fields for compact view

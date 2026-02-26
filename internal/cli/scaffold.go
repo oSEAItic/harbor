@@ -64,6 +64,7 @@ API logic and resource handlers.
   • Use HARBOR_AUTH env var for API keys, set via: harbor auth <name>
   • harbor build validates schema format automatically
   • Add contract.tests.json for automated testing
+  • Set 'required' on parameters — enables: harbor get <name>.<resource> <value>
 
 ── Example ─────────────────────────────────────────────────────
 

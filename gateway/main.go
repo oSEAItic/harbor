@@ -15,8 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oseaitic/harbor/internal/connector"
 	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/executor"
+	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
 )
@@ -74,6 +76,105 @@ func main() {
 			"status":  "healthy",
 			"service": "harbor-gateway",
 		})
+	})
+
+	// Tool discovery — returns all installed connector schemas.
+	// Used by harbor-cloud MCP server to register tools dynamically.
+	mux.HandleFunc("GET /tools", func(w http.ResponseWriter, r *http.Request) {
+		auth, authErr := authorize(r, cfg)
+		if authErr != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		_ = auth
+
+		schemas, err := connector.ExportToolSchemas()
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(schemas)
+	})
+
+	// Memory recall — search and retrieve from the gateway's memory store.
+	// Used by harbor-cloud MCP server for the harbor_recall tool.
+	memStore, _ := memory.NewStore()
+	mux.HandleFunc("POST /recall", func(w http.ResponseWriter, r *http.Request) {
+		auth, authErr := authorize(r, cfg)
+		if authErr != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		_ = auth
+
+		var req struct {
+			ID        string `json:"id"`
+			Query     string `json:"query"`
+			Layer     string `json:"layer"`
+			Connector string `json:"connector"`
+			Since     string `json:"since"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if memStore == nil {
+			json.NewEncoder(w).Encode(map[string]string{"error": "memory store not available"})
+			return
+		}
+
+		// Retrieve mode: return a specific memory object
+		if req.ID != "" {
+			obj, err := memStore.Get(req.ID)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("memory %q not found", req.ID)})
+				return
+			}
+			layer := req.Layer
+			if layer == "" {
+				layer = "compact"
+			}
+			var content json.RawMessage
+			switch layer {
+			case "raw":
+				content = obj.Layers.Raw
+			case "normalized":
+				content = obj.Layers.Normalized
+			case "summary":
+				content, _ = json.Marshal(obj.Layers.Summary)
+			default:
+				content = obj.Layers.Compact
+			}
+			if len(content) == 0 {
+				content = obj.Layers.Compact
+			}
+			if len(content) == 0 {
+				content = obj.Layers.Raw
+			}
+			json.NewEncoder(w).Encode(map[string]json.RawMessage{"content": content})
+			return
+		}
+
+		// Search/browse mode
+		opts := memory.QueryOptions{
+			Connector: req.Connector,
+			Limit:     30,
+		}
+		if req.Since != "" {
+			if d, err := time.ParseDuration(req.Since); err == nil {
+				opts.Since = d
+			}
+		}
+
+		results := memStore.Search(req.Query, opts)
+		json.NewEncoder(w).Encode(results)
 	})
 
 	mux.HandleFunc("POST /run", func(w http.ResponseWriter, r *http.Request) {

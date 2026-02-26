@@ -30,13 +30,19 @@ func newGetCmd(outputFormat string) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "get <connector.resource>",
+		Use:   "get <connector.resource> [value]",
 		Short: "Fetch data from a connector resource",
 		Long: `Fetch normalized data from a connector.
 
 By default, returns an agent-friendly overview with summary fields and a
 natural language summary. Results are saved to memory and served from
 memory on subsequent calls within the TTL window.
+
+If a resource has exactly one required parameter, you can pass its value
+as a positional argument instead of using -p:
+
+  harbor get kuse-hive.trace a71a549c-...
+  harbor get coingecko.prices bitcoin          (shorthand for -p ids=bitcoin)
 
   --full           Return full uncompiled output (for debugging)
   --budget N       Fit output to ~N tokens
@@ -49,6 +55,7 @@ memory on subsequent calls within the TTL window.
   --errors         Error mode: soft (degrade) or hard (fail fast)
 
 Examples:
+  harbor get coingecko.prices bitcoin
   harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
   harbor get coingecko.trending
   harbor get coingecko.trending --budget 500
@@ -58,8 +65,8 @@ Examples:
   harbor get coingecko.trending --refresh
   harbor get coingecko.trending --no-memory`,
 		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return fmt.Errorf("requires <connector.resource>, e.g.: harbor get coingecko.prices")
+			if len(args) < 1 || len(args) > 2 {
+				return fmt.Errorf("requires <connector.resource> [value], e.g.: harbor get coingecko.prices")
 			}
 			return nil
 		},
@@ -77,6 +84,20 @@ Examples:
 					return fmt.Errorf("invalid param format %q, expected key=value", p)
 				}
 				paramMap[kv[0]] = kv[1]
+			}
+
+			// B1: Positional shorthand — resolve positional value to required param
+			if len(args) == 2 && len(paramMap) == 0 {
+				if err := resolvePositionalParam(connectorName, resource, args[1], paramMap); err != nil {
+					return err
+				}
+			}
+
+			// B3: Missing required params — show schema hint
+			if len(paramMap) == 0 {
+				if err := checkRequiredParams(connectorName, resource, "get"); err != nil {
+					return err
+				}
 			}
 
 			// CLI-specific: handle --layer flag for memory output
@@ -147,6 +168,9 @@ Examples:
 	cmd.Flags().StringVar(&layer, "layer", "", "Layer to serve from memory (raw|normalized|compact|summary)")
 	cmd.Flags().StringVar(&errors, "errors", "soft", "Error mode: soft | hard")
 
+	// B2: Hint about -p when user passes unknown flags like --execution_id
+	cmd.SetFlagErrorFunc(flagErrorWithParamHint)
+
 	return cmd
 }
 
@@ -192,11 +216,11 @@ func newRawCmd() *cobra.Command {
 	var params []string
 
 	cmd := &cobra.Command{
-		Use:   "raw <connector.resource>",
+		Use:   "raw <connector.resource> [value]",
 		Short: "Fetch raw API response from a connector",
 		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return fmt.Errorf("requires <connector.resource>, e.g.: harbor raw coingecko.prices")
+			if len(args) < 1 || len(args) > 2 {
+				return fmt.Errorf("requires <connector.resource> [value], e.g.: harbor raw coingecko.prices")
 			}
 			return nil
 		},
@@ -213,6 +237,20 @@ func newRawCmd() *cobra.Command {
 					return fmt.Errorf("invalid param format %q, expected key=value", p)
 				}
 				paramMap[kv[0]] = kv[1]
+			}
+
+			// B1: Positional shorthand
+			if len(args) == 2 && len(paramMap) == 0 {
+				if err := resolvePositionalParam(connectorName, resource, args[1], paramMap); err != nil {
+					return err
+				}
+			}
+
+			// B3: Missing required params hint
+			if len(paramMap) == 0 {
+				if err := checkRequiredParams(connectorName, resource, "raw"); err != nil {
+					return err
+				}
 			}
 
 			token, _ := auth.Retrieve(connectorName)
@@ -243,6 +281,9 @@ func newRawCmd() *cobra.Command {
 
 	cmd.Flags().StringArrayVarP(&params, "param", "p", nil, "Connector parameters (key=value)")
 
+	// B2: Hint about -p when user passes unknown flags like --execution_id
+	cmd.SetFlagErrorFunc(flagErrorWithParamHint)
+
 	return cmd
 }
 
@@ -258,4 +299,57 @@ func printResponse(resp *protocol.Response, cmd *cobra.Command) error {
 // defaultTTL returns the TTL for a connector+resource combination.
 func defaultTTL(connector, resource string) time.Duration {
 	return memory.DefaultTTL(connector, resource)
+}
+
+// flagErrorWithParamHint wraps Cobra flag errors to hint about -p for unknown flags.
+func flagErrorWithParamHint(_ *cobra.Command, err error) error {
+	msg := err.Error()
+	if strings.Contains(msg, "unknown flag") {
+		return fmt.Errorf("%s\nHint: use -p key=value to pass connector parameters", msg)
+	}
+	return err
+}
+
+// resolvePositionalParam maps a positional value arg to the single required parameter
+// of a connector resource. If the schema is unavailable or has != 1 required param,
+// returns an error.
+func resolvePositionalParam(connectorName, resource, value string, paramMap map[string]string) error {
+	schema, err := connector.GetResourceSchema(connectorName, resource)
+	if err != nil {
+		// Schema unavailable — can't resolve positional arg
+		return fmt.Errorf("unexpected positional argument %q (could not resolve: %v)\nHint: use -p key=value to pass connector parameters", value, err)
+	}
+	required := parseRequiredParams(schema.Parameters)
+	if len(required) == 1 {
+		paramMap[required[0]] = value
+		return nil
+	}
+	if len(required) == 0 {
+		return fmt.Errorf("unexpected positional argument %q (%s.%s has no required parameters)\nHint: use -p key=value to pass connector parameters", value, connectorName, resource)
+	}
+	return fmt.Errorf("unexpected positional argument %q (%s.%s has %d required parameters: %s)\nHint: use -p key=value to pass connector parameters", value, connectorName, resource, len(required), strings.Join(required, ", "))
+}
+
+// checkRequiredParams returns a descriptive error when a resource has required
+// parameters but none were provided. Returns nil if schema is unavailable or
+// the resource has no required params (lets the connector handle it).
+func checkRequiredParams(connectorName, resource, mode string) error {
+	schema, err := connector.GetResourceSchema(connectorName, resource)
+	if err != nil {
+		return nil // schema unavailable — let connector handle validation
+	}
+	required := parseRequiredParams(schema.Parameters)
+	if len(required) == 0 {
+		return nil
+	}
+	fullName := connectorName + "." + resource
+	var usage strings.Builder
+	fmt.Fprintf(&usage, "%s requires parameter: %s\n\nUsage:\n", fullName, strings.Join(required, ", "))
+	if len(required) == 1 {
+		fmt.Fprintf(&usage, "  harbor %s %s <%s>\n", mode, fullName, required[0])
+	}
+	for _, key := range required {
+		fmt.Fprintf(&usage, "  harbor %s %s -p %s=<value>\n", mode, fullName, key)
+	}
+	return fmt.Errorf("%s", usage.String())
 }

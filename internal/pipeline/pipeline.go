@@ -1,12 +1,13 @@
 package pipeline
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/connector"
 	harborctx "github.com/oseaitic/harbor/internal/context"
+	"github.com/oseaitic/harbor/internal/executor"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/protocol"
 )
@@ -37,9 +38,9 @@ type Options struct {
 }
 
 // Execute runs the full fetch→compile→memory pipeline for a connector resource.
-// It checks memory first (unless NoMemory/Refresh), executes the connector,
-// compiles the response, and saves the result to memory.
-func Execute(connectorName, resource string, params map[string]string, summaryFields []string, opts Options) (*Result, error) {
+// It checks memory first (unless NoMemory/Refresh), executes the connector via
+// the provided Executor, compiles the response, and saves the result to memory.
+func Execute(exec executor.Executor, connectorName, resource string, params map[string]string, summaryFields []string, opts Options) (*Result, error) {
 	// Memory check: try to serve from memory before fetching
 	if !opts.NoMemory && !opts.Refresh {
 		store, err := memory.NewStore()
@@ -59,17 +60,13 @@ func Execute(connectorName, resource string, params map[string]string, summaryFi
 		}
 	}
 
-	// Retrieve auth
-	token, _ := auth.Retrieve(connectorName)
-
 	req := protocol.Request{
 		Connector: connectorName,
 		Resource:  resource,
 		Params:    params,
-		Auth:      token,
 	}
 
-	resp, err := connector.Execute(req)
+	resp, err := exec.Execute(context.Background(), req)
 	if err != nil {
 		return nil, fmt.Errorf("executing connector: %w", err)
 	}

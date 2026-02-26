@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/connector"
+	"github.com/oseaitic/harbor/internal/executor"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
@@ -67,7 +68,8 @@ func makeToolHandler(fn protocol.ToolFunction) server.ToolHandlerFunc {
 			}
 		}
 
-		result, err := pipeline.Execute(connName, resource, params, fn.SummaryFields, pipeline.Options{
+		exec := executor.NewLocalExecutor()
+		result, err := pipeline.Execute(exec, connName, resource, params, fn.SummaryFields, pipeline.Options{
 			Compile: harborctx.DefaultOptions(),
 		})
 		if err != nil {

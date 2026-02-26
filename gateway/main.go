@@ -16,6 +16,7 @@ import (
 	"time"
 
 	harborctx "github.com/oseaitic/harbor/internal/context"
+	"github.com/oseaitic/harbor/internal/executor"
 	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
 )
@@ -143,7 +144,8 @@ func main() {
 			return
 		}
 
-		result, err := pipeline.Execute(req.Connector, req.Resource, req.Params, nil, pipeline.Options{
+		exec := executor.NewLocalExecutor()
+		result, err := pipeline.Execute(exec, req.Connector, req.Resource, req.Params, nil, pipeline.Options{
 			Compile: harborctx.DefaultOptions(),
 		})
 		if err != nil {

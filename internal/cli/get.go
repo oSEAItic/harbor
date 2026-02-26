@@ -1,14 +1,15 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/connector"
 	harborctx "github.com/oseaitic/harbor/internal/context"
+	"github.com/oseaitic/harbor/internal/executor"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
@@ -135,7 +136,8 @@ Examples:
 				return fmt.Errorf("invalid --errors value %q, expected soft or hard", errors)
 			}
 
-			result, err := pipeline.Execute(connectorName, resource, paramMap, nil, pipeline.Options{
+			exec := executor.NewLocalExecutor()
+			result, err := pipeline.Execute(exec, connectorName, resource, paramMap, nil, pipeline.Options{
 				NoMemory: noMemory,
 				Refresh:  refresh,
 				Compile:  opts,
@@ -253,17 +255,15 @@ func newRawCmd() *cobra.Command {
 				}
 			}
 
-			token, _ := auth.Retrieve(connectorName)
-
+			exec := executor.NewLocalExecutor()
 			req := protocol.Request{
 				Connector: connectorName,
 				Resource:  resource,
 				Params:    paramMap,
-				Auth:      token,
 				Raw:       true,
 			}
 
-			resp, err := connector.Execute(req)
+			resp, err := exec.Execute(context.Background(), req)
 			if err != nil {
 				return fmt.Errorf("executing connector: %w", err)
 			}

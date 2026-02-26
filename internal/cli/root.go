@@ -50,6 +50,8 @@ Quick start:
 		newInstallCmd(),
 		newMCPCmd(version),
 		newAuthCmd(),
+		newLoginCmd(),
+		newLogoutCmd(),
 	)
 
 	// ── Develop ──────────────────────────────────────────────────

@@ -28,6 +28,7 @@ func newGetCmd(outputFormat string) *cobra.Command {
 		refresh   bool
 		layer     string
 		errors    string
+		local     bool
 	)
 
 	cmd := &cobra.Command{
@@ -136,7 +137,7 @@ Examples:
 				return fmt.Errorf("invalid --errors value %q, expected soft or hard", errors)
 			}
 
-			exec := executor.NewLocalExecutor()
+			exec := executor.Resolve(local)
 			result, err := pipeline.Execute(exec, connectorName, resource, paramMap, nil, pipeline.Options{
 				NoMemory: noMemory,
 				Refresh:  refresh,
@@ -169,6 +170,7 @@ Examples:
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force fresh fetch (bypass memory)")
 	cmd.Flags().StringVar(&layer, "layer", "", "Layer to serve from memory (raw|normalized|compact|summary)")
 	cmd.Flags().StringVar(&errors, "errors", "soft", "Error mode: soft | hard")
+	cmd.Flags().BoolVar(&local, "local", false, "Force local connector execution")
 
 	// B2: Hint about -p when user passes unknown flags like --execution_id
 	cmd.SetFlagErrorFunc(flagErrorWithParamHint)
@@ -215,7 +217,10 @@ func outputFromMemory(cmd *cobra.Command, obj *memory.Object, layerFlag string) 
 }
 
 func newRawCmd() *cobra.Command {
-	var params []string
+	var (
+		params []string
+		local  bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "raw <connector.resource> [value]",
@@ -255,7 +260,7 @@ func newRawCmd() *cobra.Command {
 				}
 			}
 
-			exec := executor.NewLocalExecutor()
+			exec := executor.Resolve(local)
 			req := protocol.Request{
 				Connector: connectorName,
 				Resource:  resource,
@@ -280,6 +285,7 @@ func newRawCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringArrayVarP(&params, "param", "p", nil, "Connector parameters (key=value)")
+	cmd.Flags().BoolVar(&local, "local", false, "Force local connector execution")
 
 	// B2: Hint about -p when user passes unknown flags like --execution_id
 	cmd.SetFlagErrorFunc(flagErrorWithParamHint)

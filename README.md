@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="assets/harbor-banner.jpeg" alt="Harbor — One CLI. Every Data Source." width="800" />
+  <img src="assets/harbor-banner.jpeg" alt="Harbor" width="800" />
 </p>
 
 <p align="center">
-  <strong>One CLI, Every Data Source for LLM Agents.</strong><br/>
-  Turn any external API into LLM-readable context with schema versioning, source provenance, and built-in tool discovery.
+  <strong>The context infrastructure for AI agents.</strong><br/>
+  Normalize, compress, and govern the data flowing into your agents — any source, any density, your control.
 </p>
 
 <p align="center">
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
-  <a href="#why-context-engineering">Context Engineering</a> &middot;
+  <a href="#why-harbor">Why Harbor</a> &middot;
   <a href="#creating-a-connector">Build a Connector</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
   <a href="LICENSE">License</a> &middot;
@@ -21,31 +21,41 @@
 
 ## The Story
 
-**oSEAItic** builds infrastructure for AI that reasons over real-world data.
+**oSEAItic** believes data should flow like the ocean — open, boundless, alive. Every API, every database, every real-time feed is a current in that ocean. AI agents should be able to reach into any current, anywhere, and pull out exactly what they need.
 
-It started with [Little RAG](https://github.com/oseaitic/little-rag) — a retrieval-augmented generation platform. The retrieval part worked. The augmentation part was the problem. Every time we connected a new data source — crypto prices, payment records, weather feeds, internal databases — the agent received a different shape of data. Different field names, different nesting, different error formats, no provenance, no schema version. The model had to waste context window just *figuring out what it was looking at* before it could reason about it.
+But they can't. Not yet.
 
-We were doing context engineering by hand, writing bespoke adapters that translated each API's response into something an LLM could actually use. Multiply that across dozens of sources and the context engineering layer became bigger than the agent itself.
+Every time an agent connects to a data source — crypto prices, payment records, weather feeds, internal databases — it receives a different shape of data. Different field names, different nesting, different error formats, no provenance, no schema version. The model burns context window just *figuring out what it's looking at* before it can start reasoning.
 
-We asked ourselves: *what if every data source was already LLM-readable?*
+That is the first problem: **inconsistency**. Agents waste intelligence decoding format instead of reasoning about content.
 
-That question became **Harbor**.
+The second: **waste**. A 200-field API response might contain 6 fields the agent actually needs. The rest is noise — consuming tokens, diluting attention, inflating cost. Hand-writing compression logic for every source means the context engineering layer grows larger than the agent itself.
 
-The name comes from what a harbor actually does — ships of every shape and origin dock at the same port. Cargo gets unloaded into a standard format, inventoried with provenance metadata, and dispatched. It doesn't matter whether the ship sailed from CoinGecko, Stripe, or a private database — once it's in the harbor, everything follows the same protocol. The agent never has to ask *"what am I looking at?"* — the schema, source, version, and timestamp are already there.
+The third, and most dangerous: **leakage**. When an agent calls a financial API, the response might include employee salaries, SSNs, bank account numbers. The agent's role says "analyst" — it should see revenue and margins, not personal data. But raw API responses don't respect role boundaries. Once data enters the context window, it's exposed — to the model, to the logs, to prompt injection attacks. **What an agent can see defines what an agent can do.** And today, agents see everything.
 
-Harbor is a context engineering layer for AI agents. Every connector normalizes upstream data into a consistent JSON envelope that LLMs can parse without preamble. `harbor tools export` emits OpenAI-compatible function schemas so agents discover what data they can reach. The model doesn't just get data — it gets **structured, self-describing, provenance-tracked context** that maximizes the value of every token in the context window.
+Three problems. One insight: *agents should never touch raw data.*
 
-We built Harbor because the missing piece in agent infrastructure isn't better models — it's better context. We open-sourced it because everyone building agents needs this too.
+That insight became **Harbor**.
 
-**One CLI. Every data source. Context-engineered for agents.**
+The name is the metaphor. Ships of every shape arrive from every ocean — CoinGecko, Stripe, Notion, internal databases. The harbor receives them all at the same dock. Cargo is unloaded into a standard format, inspected, compressed to the density you need, filtered by what you're allowed to see, and dispatched. The agent never asks *"what am I looking at?"* — the schema, source, version, and timestamp are already there. And data that shouldn't be in the context window never enters it.
+
+Harbor is not a wrapper. It is a **self-improving information supply chain** — normalizing, compressing, governing, and remembering every piece of data flowing into AI agents. Agents teach Harbor what fields matter. Harbor detects when upstream APIs change shape and adapts. Every call is cached into a 4-layer memory system. The system gets smarter with every interaction, and every agent benefits from what any agent has learned.
+
+We believe the missing piece in agent infrastructure isn't better models — it's better context. Context that is structured, efficient, governed, and alive.
+
+We open-sourced Harbor because everyone building agents needs this.
+
+**Data flows like the ocean. Harbor is where agents meet that ocean.**
 
 ---
 
-## Why Context Engineering?
+## Why Harbor?
 
-LLMs are only as good as the context they receive. Most agent frameworks focus on *orchestration* — which tool to call, when to loop, how to plan. Harbor focuses on what happens **after** the tool call returns: the quality of the data that lands in the context window.
+Agent frameworks focus on *orchestration* — which tool to call, when to loop, how to plan. Nobody focuses on what happens **after** the tool call returns: the quality, efficiency, and safety of the data landing in the context window.
 
-### The problem with raw API responses
+Harbor does. Three pillars:
+
+### Normalize — One format, any source
 
 ```
 // What CoinGecko returns
@@ -55,13 +65,9 @@ LLMs are only as good as the context they receive. Most agent frameworks focus o
 {"data":[{"id":"txn_1abc","amount":4999,"currency":"usd","created":1707900000}]}
 ```
 
-An agent receiving these has to:
-1. Figure out the structure of each response (wasted reasoning tokens)
-2. Guess field semantics with no schema reference
-3. Handle errors differently per source
-4. Track nothing about freshness, version, or provenance
+An agent receiving these raw responses has to guess structure, guess semantics, handle errors differently per source, and track nothing about freshness or provenance.
 
-### What Harbor gives the agent instead
+Harbor gives the agent this instead:
 
 ```json
 {
@@ -81,23 +87,39 @@ An agent receiving these has to:
 }
 ```
 
-Every response is **self-describing**. The agent knows:
-- **What source** produced this data (`meta.source`)
-- **What schema** to expect (`meta.schema`) — so it can parse without guessing
-- **When** it was fetched (`meta.fetched_at`) — staleness-aware reasoning
-- **What version** of the connector ran (`meta.connector_version`) — reproducibility
-- **Whether errors occurred** (`errors[]`) — no silent failures
+Every response is **self-describing**. The agent knows what source produced it, what schema to parse against, when it was fetched, and whether errors occurred. Zero tokens wasted on format — all tokens on reasoning.
 
-This is context engineering at the protocol level. The agent spends zero tokens understanding the format and all tokens reasoning about the content.
+### Compress — Right density for the task
 
-### Tool discovery for agents
+Not every task needs every field. Harbor maintains 4 layers of the same data:
+
+| Layer | What it holds | When to use it |
+|-------|--------------|----------------|
+| `raw` | Original API response | Full fidelity debugging |
+| `normalized` | Structured `data[]` array | Standard agent reasoning |
+| `compact` | Summary fields only | Token-constrained contexts |
+| `summary` | Natural language one-liner | Quick scanning, planning |
+
+Agents choose the density. A planning step gets summaries. A deep analysis gets normalized. A debug session gets raw. Same data, four levels of detail, massive token savings.
+
+Schema learning makes this automatic: the agent teaches Harbor which fields matter by calling `harbor_learn_schema`. Harbor remembers permanently. Every future call is compressed. Drift detection monitors field usage — if an upstream API changes shape, Harbor rolls back and re-learns.
+
+### Govern — Only what agents should see
+
+What an agent perceives defines what it can do. Raw API responses don't respect role boundaries — a "read invoices" call might return employee PII alongside financial summaries.
+
+Harbor sits at the boundary. It controls which fields enter the context window based on who's asking. Data that an agent's role shouldn't see never reaches the model, the logs, or the attack surface. This is not API-level access control ("can you call this endpoint?") — it is **context-level access control** ("what do you see when you call it?").
+
+The difference matters. An agent that can't see a field can't reason about it, can't leak it, can't be tricked into revealing it.
+
+### Tool discovery
 
 ```bash
 harbor tools export
 harbor tools export --format mcp
 ```
 
-Emits tool schemas from Harbor's internal Tool IR. OpenAI function-calling and MCP formats are supported (`--format openai|mcp`) — one resource per connector tool. Drop it into any function-calling agent and the model instantly knows what data sources exist, what parameters they accept, and what they return. No manual tool definitions. No drift between docs and reality.
+Emits tool schemas from Harbor's internal Tool IR. OpenAI function-calling and MCP formats are supported — one resource per connector tool. Drop it into any function-calling agent and the model instantly knows what data sources exist, what parameters they accept, and what they return. No manual tool definitions. No drift between docs and reality.
 
 ```json
 [
@@ -491,34 +513,43 @@ Auth is injected via the `HARBOR_AUTH` environment variable — connectors never
 ## Architecture
 
 ```
-                        ┌─────────────────────────────────────────┐
-                        │              AI Agent                    │
-                        │  (Claude, GPT-4, local LLM, etc.)       │
-                        └──────────┬──────────────────▲───────────┘
-                                   │ function call    │ structured context
-                        ┌──────────▼──────────────────┤───────────┐
-                        │           Harbor CLI                     │
-                        │                                          │
-                        │  harbor get <connector>.<resource>       │
-                        │  harbor tools export                     │
-                        │  harbor auth <connector>                 │
-                        └──┬────────────┬────────────┬────────────┘
-                           │            │            │
-              ┌────────────▼──┐  ┌──────▼─────┐  ┌──▼────────────┐
-              │   coingecko   │  │   stripe   │  │  your-source  │
-              │  (connector)  │  │ (connector)│  │  (connector)  │
-              └───────┬───────┘  └──────┬─────┘  └──────┬────────┘
-                      │                 │               │
-              ┌───────▼───────┐  ┌──────▼─────┐  ┌─────▼─────────┐
-              │  CoinGecko    │  │  Stripe    │  │  Any API /    │
-              │  API          │  │  API       │  │  Database     │
-              └───────────────┘  └────────────┘  └───────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │                 AI Agent                      │
+                    │    (Claude, GPT-4, Cursor, local LLM, ...)   │
+                    └─────────┬────────────────────▲────────────────┘
+                              │ tool call          │ governed context
+                    ┌─────────▼────────────────────┤────────────────┐
+                    │                Harbor                          │
+                    │                                                │
+                    │  ┌───────────┐ ┌──────────┐ ┌──────────────┐  │
+                    │  │ Normalize │→│ Compress │→│   Govern     │  │
+                    │  │           │ │          │ │              │  │
+                    │  │ Envelope  │ │ 4-layer  │ │ Field-level  │  │
+                    │  │ Schema    │ │ Memory   │ │ Access Ctrl  │  │
+                    │  │ Provenance│ │ Learning │ │ Role-based   │  │
+                    │  └───────────┘ └──────────┘ └──────────────┘  │
+                    │                                                │
+                    │  ┌──────────────────────────────────────────┐  │
+                    │  │ Schema Learning ←→ Drift Detection       │  │
+                    │  │ Memory Store ←→ Recall                   │  │
+                    │  │ Metrics ←→ Compression Analytics         │  │
+                    │  └──────────────────────────────────────────┘  │
+                    └──┬────────────┬────────────┬──────────────────┘
+                       │            │            │
+          ┌────────────▼──┐  ┌──────▼─────┐  ┌──▼────────────┐
+          │   coingecko   │  │   stripe   │  │  your-source  │
+          │  (connector)  │  │ (connector)│  │  (connector)  │
+          └───────┬───────┘  └──────┬─────┘  └──────┬────────┘
+                  │                 │               │
+          ┌───────▼───────┐  ┌──────▼─────┐  ┌─────▼─────────┐
+          │  CoinGecko    │  │  Stripe    │  │  Any API /    │
+          │  API          │  │  API       │  │  Database     │
+          └───────────────┘  └────────────┘  └───────────────┘
 
-Each connector:
-  1. Receives args + auth from Harbor
-  2. Fetches raw data from upstream
-  3. Context-engineers it into normalized JSON envelope
-  4. Returns self-describing, schema-versioned data to the agent
+The ocean of data flows upward through Harbor.
+Each connector docks at the same port.
+Cargo is normalized, compressed, governed, and dispatched.
+The agent receives exactly what it needs — nothing more, nothing less.
 ```
 
 ## Project Structure
@@ -569,7 +600,7 @@ curl -X POST http://localhost:8080/run \
   -d '{"connector":"coingecko","resource":"prices","params":{"ids":"bitcoin","vs_currencies":"usd"}}'
 ```
 
-The response is identical to CLI output — same envelope, same context engineering, same agent-readiness.
+The response is identical to CLI output — same envelope, same context engineering, same governance.
 
 ## License
 
@@ -579,5 +610,5 @@ Apache 2.0 — see [LICENSE](LICENSE).
 
 <p align="center">
   Built by <a href="https://github.com/oseaitic"><strong>oSEAItic</strong></a><br/>
-  <sub>Context engineering infrastructure for AI agents.</sub>
+  <sub>Data should flow like the ocean. We build the infrastructure where AI meets that ocean.</sub>
 </p>

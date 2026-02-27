@@ -78,9 +78,10 @@ type ToolSchema struct {
 
 // ToolFunction is the function definition inside a ToolSchema.
 type ToolFunction struct {
-	Name            string          `json:"name"`
-	Description     string          `json:"description"`
-	Parameters      json.RawMessage `json:"parameters"`
-	SummaryFields   []string        `json:"summary_fields,omitempty"`
-	SummaryTemplate string          `json:"summary_template,omitempty"`
+	Name            string            `json:"name"`
+	Description     string            `json:"description"`
+	Parameters      json.RawMessage   `json:"parameters"`
+	SummaryFields   []string          `json:"summary_fields,omitempty"`
+	SummaryTemplate string            `json:"summary_template,omitempty"`
+	FieldVisibility map[string]string `json:"field_visibility,omitempty"`
 }

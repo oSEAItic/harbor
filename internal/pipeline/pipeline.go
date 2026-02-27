@@ -2,21 +2,24 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/oseaitic/harbor/internal/connector"
 	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/executor"
+	"github.com/oseaitic/harbor/internal/govern"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/protocol"
 )
 
 // Result holds the output of a pipeline execution.
 type Result struct {
-	Response *protocol.Response
-	MemoryID string
-	FromMem  bool
+	Response            *protocol.Response
+	MemoryID            string
+	FromMem             bool
+	GovernFieldsRemoved int // number of field types removed by govern filter
 }
 
 // ErrorMode controls whether pipeline errors are hard-fail or soft-degraded.
@@ -31,10 +34,11 @@ const (
 
 // Options controls pipeline behaviour.
 type Options struct {
-	NoMemory bool
-	Refresh  bool
-	Compile  harborctx.CompileOptions
-	Errors   ErrorMode
+	NoMemory      bool
+	Refresh       bool
+	Compile       harborctx.CompileOptions
+	Errors        ErrorMode
+	MaxVisibility string // govern Layer 3: field visibility ceiling (empty = no filtering)
 }
 
 // Execute runs the full fetch→compile→memory pipeline for a connector resource.
@@ -71,11 +75,25 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 		return nil, fmt.Errorf("executing connector: %w", err)
 	}
 
-	// Fetch summary fields from connector schema if not provided
+	// Fetch summary fields and field visibility from connector schema
 	schema := resp.Meta.Schema
+	var fieldVisibility map[string]string
 	if len(summaryFields) == 0 && opts.Compile.Mode != "full" {
 		if tf, err := connector.GetResourceSchema(connectorName, resource); err == nil {
 			summaryFields = tf.SummaryFields
+			fieldVisibility = tf.FieldVisibility
+		}
+	}
+
+	// Govern Layer 3: filter fields by visibility before compile
+	var governResult govern.FilterResult
+	if opts.MaxVisibility != "" && len(fieldVisibility) > 0 {
+		var items []map[string]interface{}
+		if err := json.Unmarshal(resp.Data, &items); err == nil && len(items) > 0 {
+			items, governResult = govern.FilterItems(items, fieldVisibility, opts.MaxVisibility)
+			if filtered, err := json.Marshal(items); err == nil {
+				resp.Data = filtered
+			}
 		}
 	}
 
@@ -110,9 +128,10 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 	}
 
 	return &Result{
-		Response: compiled,
-		MemoryID: memID,
-		FromMem:  false,
+		Response:            compiled,
+		MemoryID:            memID,
+		FromMem:             false,
+		GovernFieldsRemoved: governResult.RemovedCount,
 	}, nil
 }
 

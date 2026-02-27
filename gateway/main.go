@@ -18,6 +18,7 @@ import (
 	"github.com/oseaitic/harbor/internal/connector"
 	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/executor"
+	"github.com/oseaitic/harbor/internal/govern"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
@@ -47,17 +48,20 @@ type rateWindow struct {
 }
 
 type auditEvent struct {
-	TimeMs      int64  `json:"time_ms"`
-	Actor       string `json:"actor"`
-	AuthType    string `json:"auth_type"`
-	Connector   string `json:"connector"`
-	Resource    string `json:"resource"`
-	StatusCode  int    `json:"status_code"`
-	DurationMs  int64  `json:"duration_ms"`
-	FromMemory  bool   `json:"from_memory"`
-	Error       string `json:"error,omitempty"`
-	RemoteAddr  string `json:"remote_addr,omitempty"`
-	RequestPath string `json:"request_path"`
+	TimeMs              int64  `json:"time_ms"`
+	Actor               string `json:"actor"`
+	AuthType            string `json:"auth_type"`
+	Connector           string `json:"connector"`
+	Resource            string `json:"resource"`
+	StatusCode          int    `json:"status_code"`
+	DurationMs          int64  `json:"duration_ms"`
+	FromMemory          bool   `json:"from_memory"`
+	Error               string `json:"error,omitempty"`
+	RemoteAddr          string `json:"remote_addr,omitempty"`
+	RequestPath         string `json:"request_path"`
+	MaxVisibility       string `json:"max_visibility,omitempty"`
+	GovernFieldsRemoved int    `json:"govern_fields_removed,omitempty"`
+	PolicyApplied       bool   `json:"policy_applied,omitempty"`
 }
 
 func main() {
@@ -95,6 +99,13 @@ func main() {
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
+
+		// Govern Layer 1: filter schemas by allowed connectors.
+		if connFilter := r.URL.Query().Get("connectors"); connFilter != "" {
+			allowed := strings.Split(connFilter, ",")
+			schemas = filterSchemasByConnector(schemas, allowed)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(schemas)
 	})
@@ -195,8 +206,12 @@ func main() {
 			return
 		}
 
-		var req protocol.Request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Parse request body as Request + optional Policy.
+		var body struct {
+			protocol.Request
+			Policy *govern.Policy `json:"policy,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 			logAudit(cfg, auditEvent{
 				TimeMs:      time.Now().UnixMilli(),
@@ -210,6 +225,8 @@ func main() {
 			})
 			return
 		}
+		req := body.Request
+		policy := body.Policy
 
 		if req.Connector == "" || req.Resource == "" {
 			http.Error(w, `{"error":"connector and resource are required"}`, http.StatusBadRequest)
@@ -224,6 +241,25 @@ func main() {
 				Error:       "missing connector/resource",
 				RemoteAddr:  r.RemoteAddr,
 				RequestPath: r.URL.Path,
+			})
+			return
+		}
+
+		// Govern Layer 1+2: check connector/resource access.
+		if policy != nil && !policy.CanAccess(req.Connector, req.Resource) {
+			http.Error(w, `{"error":"forbidden: connector/resource not allowed by policy"}`, http.StatusForbidden)
+			logAudit(cfg, auditEvent{
+				TimeMs:        time.Now().UnixMilli(),
+				Actor:         auth.Actor,
+				AuthType:      auth.Type,
+				Connector:     req.Connector,
+				Resource:      req.Resource,
+				StatusCode:    http.StatusForbidden,
+				DurationMs:    time.Since(start).Milliseconds(),
+				Error:         "policy denied connector/resource",
+				PolicyApplied: true,
+				RemoteAddr:    r.RemoteAddr,
+				RequestPath:   r.URL.Path,
 			})
 			return
 		}
@@ -245,9 +281,16 @@ func main() {
 			return
 		}
 
+		// Govern Layer 3: pass max_visibility to pipeline.
+		var maxVis string
+		if policy != nil {
+			maxVis = policy.MaxVisibility
+		}
+
 		exec := executor.NewLocalExecutor()
 		result, err := pipeline.Execute(exec, req.Connector, req.Resource, req.Params, nil, pipeline.Options{
-			Compile: harborctx.DefaultOptions(),
+			Compile:       harborctx.DefaultOptions(),
+			MaxVisibility: maxVis,
 		})
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -280,16 +323,19 @@ func main() {
 		w.Write(respBytes)
 
 		logAudit(cfg, auditEvent{
-			TimeMs:      time.Now().UnixMilli(),
-			Actor:       auth.Actor,
-			AuthType:    auth.Type,
-			Connector:   req.Connector,
-			Resource:    req.Resource,
-			StatusCode:  http.StatusOK,
-			DurationMs:  time.Since(start).Milliseconds(),
-			FromMemory:  result.FromMem,
-			RemoteAddr:  r.RemoteAddr,
-			RequestPath: r.URL.Path,
+			TimeMs:              time.Now().UnixMilli(),
+			Actor:               auth.Actor,
+			AuthType:            auth.Type,
+			Connector:           req.Connector,
+			Resource:            req.Resource,
+			StatusCode:          http.StatusOK,
+			DurationMs:          time.Since(start).Milliseconds(),
+			FromMemory:          result.FromMem,
+			RemoteAddr:          r.RemoteAddr,
+			RequestPath:         r.URL.Path,
+			MaxVisibility:       maxVis,
+			GovernFieldsRemoved: result.GovernFieldsRemoved,
+			PolicyApplied:       policy != nil,
 		})
 	})
 
@@ -409,6 +455,22 @@ func logAudit(cfg gatewayConfig, ev auditEvent) {
 	}
 	defer f.Close()
 	_, _ = f.Write(append(line, '\n'))
+}
+
+// filterSchemasByConnector returns only schemas whose connector prefix matches
+// one of the allowed names. Connector name is derived from the "connector.resource" tool name.
+func filterSchemasByConnector(schemas []protocol.ToolSchema, allowed []string) []protocol.ToolSchema {
+	set := make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		set[strings.TrimSpace(name)] = true
+	}
+	var filtered []protocol.ToolSchema
+	for _, s := range schemas {
+		if parts := strings.SplitN(s.Function.Name, ".", 2); len(parts) == 2 && set[parts[0]] {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
 }
 
 func parseHS256JWT(token, secret string) (string, error) {

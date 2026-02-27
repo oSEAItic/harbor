@@ -105,6 +105,7 @@ const toolSchemas: HarborToolSchema[] = [
       },
       summary_fields: [],      // TODO: Fields for compact view
       summary_template: "",    // TODO: Template for summary text
+      field_visibility: {},    // TODO: Map field names to visibility (public|internal|confidential|restricted)
     },
   },
 ];

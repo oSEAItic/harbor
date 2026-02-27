@@ -33,6 +33,41 @@ func TestRoundTripOpenAI(t *testing.T) {
 	}
 }
 
+func TestRoundTripOpenAIWithFieldVisibility(t *testing.T) {
+	openai := []protocol.ToolSchema{
+		{
+			Type: "function",
+			Function: protocol.ToolFunction{
+				Name:            "coingecko.prices",
+				Description:     "Get prices",
+				Parameters:      json.RawMessage(`{"type":"object","properties":{"ids":{"type":"string"}}}`),
+				SummaryFields:   []string{"id", "usd"},
+				SummaryTemplate: "{id}: ${usd}",
+				FieldVisibility: map[string]string{
+					"id":  "public",
+					"usd": "public",
+					"cap": "internal",
+				},
+			},
+		},
+	}
+
+	ir := FromOpenAISchemas(openai)
+
+	// Verify IR has FieldVisibility
+	if len(ir) != 1 {
+		t.Fatalf("expected 1 IR, got %d", len(ir))
+	}
+	if ir[0].FieldVisibility["cap"] != "internal" {
+		t.Fatalf("FieldVisibility not copied to IR: %v", ir[0].FieldVisibility)
+	}
+
+	got := ToOpenAISchemas(ir)
+	if !reflect.DeepEqual(got, openai) {
+		t.Fatalf("round-trip mismatch:\n got=%#v\nwant=%#v", got, openai)
+	}
+}
+
 func TestExportersGolden(t *testing.T) {
 	ir := []ToolIR{
 		{

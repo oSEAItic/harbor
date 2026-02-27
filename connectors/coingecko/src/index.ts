@@ -37,6 +37,12 @@ const toolSchemas: HarborToolSchema[] = [
       },
       summary_fields: ["id", "usd", "usd_24h_change", "usd_market_cap"],
       summary_template: "{id}: ${usd} ({usd_24h_change}%)",
+      field_visibility: {
+        id: "public",
+        usd: "public",
+        usd_24h_change: "public",
+        usd_market_cap: "internal",
+      },
     },
   },
   {
@@ -56,6 +62,14 @@ const toolSchemas: HarborToolSchema[] = [
       },
       summary_fields: ["id", "name", "symbol", "market_cap_rank"],
       summary_template: "{name} ({symbol}) — rank #{market_cap_rank}",
+      field_visibility: {
+        id: "public",
+        name: "public",
+        symbol: "public",
+        market_cap_rank: "public",
+        market_data: "confidential",
+        description: "internal",
+      },
     },
   },
   {
@@ -69,6 +83,13 @@ const toolSchemas: HarborToolSchema[] = [
       },
       summary_fields: ["id", "name", "symbol", "market_cap_rank", "score"],
       summary_template: "{name} ({symbol}, #{market_cap_rank})",
+      field_visibility: {
+        id: "public",
+        name: "public",
+        symbol: "public",
+        market_cap_rank: "public",
+        score: "public",
+      },
     },
   },
 ];

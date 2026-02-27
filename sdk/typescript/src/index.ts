@@ -30,6 +30,13 @@ export interface HarborResponse<T = unknown> {
   errors: HarborError[];
 }
 
+/** Visibility levels for field-level access control (Govern). */
+export type HarborVisibility =
+  | "public"
+  | "internal"
+  | "confidential"
+  | "restricted";
+
 export interface HarborToolSchema {
   type: "function";
   function: {
@@ -38,6 +45,8 @@ export interface HarborToolSchema {
     parameters: Record<string, unknown>;
     summary_fields?: string[];
     summary_template?: string;
+    /** Maps field names to their visibility level. Fields not listed default to "public". */
+    field_visibility?: Record<string, HarborVisibility>;
   };
 }
 

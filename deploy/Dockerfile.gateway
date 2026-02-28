@@ -1,0 +1,49 @@
+# Stage 1: Build harbor gateway binary
+FROM golang:1.24 AS go-builder
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o /out/harbor-gateway ./gateway
+
+# Stage 2: Build community connector bundles from source.
+# @oseaitic/harbor-sdk is published to npm.
+# Use npm install (not npm ci) — package-lock.json is gitignored.
+FROM node:20 AS connector-builder
+
+WORKDIR /build
+
+# coingecko
+COPY connectors/coingecko/package.json ./coingecko/
+RUN cd coingecko && npm install --legacy-peer-deps
+COPY connectors/coingecko/src ./coingecko/src/
+RUN cd coingecko && \
+    npx esbuild src/index.ts \
+      --bundle --platform=node --target=node18 --format=cjs \
+      --banner:js="#!/usr/bin/env node" \
+      --outfile=/out/coingecko
+
+# yahoo
+COPY connectors/yahoo/package.json ./yahoo/
+RUN cd yahoo && npm install --legacy-peer-deps
+COPY connectors/yahoo/src ./yahoo/src/
+RUN cd yahoo && \
+    npx esbuild src/index.ts \
+      --bundle --platform=node --target=node18 --format=cjs \
+      --banner:js="#!/usr/bin/env node" \
+      --outfile=/out/yahoo
+
+# Stage 3: Runtime — node:20-slim for connector execution
+FROM node:20-slim
+
+COPY --from=go-builder        /out/harbor-gateway          /harbor-gateway
+COPY --from=connector-builder /out/coingecko /root/.harbor/connectors/coingecko
+COPY --from=connector-builder /out/yahoo     /root/.harbor/connectors/yahoo
+RUN chmod +x /root/.harbor/connectors/coingecko \
+             /root/.harbor/connectors/yahoo
+
+EXPOSE 8080
+ENV PORT=8080
+ENTRYPOINT ["/harbor-gateway"]

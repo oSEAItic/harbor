@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/protocol"
 )
 
@@ -32,6 +33,12 @@ func NewRemoteExecutor(endpoint, apiKey string) *RemoteExecutor {
 
 // Execute sends the request to the remote gateway and returns the response.
 func (e *RemoteExecutor) Execute(ctx context.Context, req protocol.Request) (*protocol.Response, error) {
+	if req.Auth == "" {
+		if token, err := auth.Retrieve(req.Connector); err == nil {
+			req.Auth = token
+		}
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request: %w", err)

@@ -3,8 +3,10 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/spf13/cobra"
@@ -21,10 +23,12 @@ func newLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with Harbor Cloud",
-		Long: `Log in to Harbor Cloud to run connectors remotely.
+		Long: `Log in to Harbor Cloud using your API key.
 
 After logging in, commands like 'harbor get' will execute through the
 cloud by default. Use --local to force local execution.
+
+Don't have an account? Sign up at https://harbor.oseaitic.com
 
 Examples:
   harbor login                                         # Interactive
@@ -44,6 +48,7 @@ Examples:
 					endpoint = defaultEndpoint
 				}
 			}
+			endpoint = strings.TrimRight(endpoint, "/")
 
 			if key == "" {
 				fmt.Print("API Key: ")
@@ -55,19 +60,26 @@ Examples:
 			}
 
 			if key == "" {
-				return fmt.Errorf("API key is required")
+				return fmt.Errorf("API key is required\n\nDon't have an account? Sign up at https://harbor.oseaitic.com")
 			}
+
+			// Validate before saving
+			fmt.Fprintf(cmd.OutOrStdout(), "Verifying credentials...")
+			if err := validateAPIKey(endpoint, key); err != nil {
+				fmt.Fprintln(cmd.OutOrStdout())
+				return fmt.Errorf("login failed: %w", err)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), " ok")
 
 			cfg := cloudauth.Config{
-				Endpoint: strings.TrimRight(endpoint, "/"),
+				Endpoint: endpoint,
 				APIKey:   key,
 			}
-
 			if err := cloudauth.Save(cfg); err != nil {
 				return fmt.Errorf("saving credentials: %w", err)
 			}
 
-			fmt.Printf("Logged in to %s\n", cfg.Endpoint)
+			fmt.Fprintf(cmd.OutOrStdout(), "Logged in to %s\n", cfg.Endpoint)
 			return nil
 		},
 	}
@@ -76,6 +88,28 @@ Examples:
 	cmd.Flags().StringVar(&key, "key", "", "API key")
 
 	return cmd
+}
+
+// validateAPIKey makes a lightweight authenticated call to verify the API key works.
+func validateAPIKey(endpoint, apiKey string) error {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/credentials", nil)
+	if err != nil {
+		return fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("X-API-Key", apiKey)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("connecting to %s: %w", endpoint, err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("invalid API key")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func newLogoutCmd() *cobra.Command {

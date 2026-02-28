@@ -146,12 +146,12 @@ Emits tool schemas from Harbor's internal Tool IR. OpenAI function-calling and M
 ## Install
 
 ```bash
-# From source
-go install github.com/oseaitic/harbor/cmd/harbor@latest
+curl -fsSL https://harbor.oseaitic.com/install | bash
+```
 
-# Or build locally
-make build
-./bin/harbor version
+Or from source:
+```bash
+go install github.com/oseaitic/harbor/cmd/harbor@latest
 ```
 
 Optional: override Harbor's local data path (connectors, memory, schemas, metrics):
@@ -159,6 +159,29 @@ Optional: override Harbor's local data path (connectors, memory, schemas, metric
 ```bash
 export HARBOR_HOME="$PWD/.harbor"
 ```
+
+## Harbor Cloud
+
+Connect to Harbor Cloud to store credentials and publish private connectors — accessible from any machine or agent session.
+
+```bash
+# Sign in
+harbor login
+
+# Store a connector's API key in the cloud (client-side encrypted, server never sees plaintext)
+harbor auth my-connector
+
+# On another machine: pull credentials from cloud into local keychain
+harbor auth sync my-connector
+
+# Publish a private connector to your account
+harbor publish my-connector
+
+# Check credential status (local + cloud)
+harbor auth status
+```
+
+Credentials are encrypted client-side with AES-256-GCM before upload. The server stores only ciphertext and cannot decrypt it.
 
 ## Quick Start
 

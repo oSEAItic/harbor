@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const defaultEndpoint = "https://api.harbor.dev"
+const defaultEndpoint = "https://harbor-cloud.oseaitic.com"
 
 func newLoginCmd() *cobra.Command {
 	var (

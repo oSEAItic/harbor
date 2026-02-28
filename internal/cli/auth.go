@@ -18,20 +18,23 @@ func newAuthCmd() *cobra.Command {
 		Short: "Manage connector credentials",
 		Long: `Manage authentication credentials for connectors.
 
-When logged in to Harbor Cloud, credentials are stored encrypted in the cloud
-using client-side AES-256-GCM (PBKDF2 key from your Harbor password).
-The server stores only ciphertext and cannot decrypt it.
+When logged in to Harbor Cloud, credentials are stored encrypted in Harbor Cloud
+(client-side AES-256-GCM, key derived from your API key — the server never sees
+plaintext). They are also written to the local Harbor Keychain
+(~/.harbor/keychain.json, AES-256-GCM encrypted with your API key).
 
-When not logged in, credentials fall back to the local OS keychain.
+On a new machine or sandbox: run 'harbor login' to automatically sync all
+credentials from Harbor Cloud to the local Harbor Keychain. No password prompts.
 
-Use 'harbor auth sync' to pull cloud credentials into the local OS keychain
-for use with locally-executed private connectors.
+Resolution order for 'harbor get --local':
+  1. OS keychain (macOS / Linux)
+  2. Harbor Keychain (~/.harbor/keychain.json) — works in any environment
 
 Examples:
-  harbor auth github-mcp          # Store credential (cloud if logged in)
-  harbor auth github-mcp --local  # Force store in local OS keychain
-  harbor auth sync                # Sync all cloud credentials to local keychain
-  harbor auth sync github-mcp     # Sync one connector to local keychain
+  harbor auth kuse-hive           # Store credential (cloud + Harbor Keychain if logged in)
+  harbor auth kuse-hive --local   # Force store in OS keychain only
+  harbor auth sync                # Sync all cloud credentials to Harbor Keychain
+  harbor auth sync github-mcp     # Sync one connector
   harbor auth status              # List all stored credentials
   harbor auth status github-mcp   # Check if credential exists
   harbor auth delete github-mcp   # Remove credential (cloud + local)`,
@@ -82,20 +85,18 @@ func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
 	}
 
 	if useCloud {
-		password, err := promptSecret("Harbor password (used locally to encrypt — never sent to server)")
-		if err != nil {
-			return fmt.Errorf("reading password: %w", err)
-		}
-		if password == "" {
-			return fmt.Errorf("password is required for cloud encryption")
-		}
-
+		// Encrypt client-side with the API key — no separate password needed.
+		// The server stores only ciphertext and cannot decrypt it.
 		fmt.Fprintf(cmd.OutOrStdout(), "\nEncrypting and uploading...\n")
-		if err := cloudauth.StoreCloudCredential(connector, credential, password, cfg); err != nil {
+		if err := cloudauth.StoreCloudCredential(connector, credential, cfg.APIKey, cfg); err != nil {
 			return fmt.Errorf("storing cloud credential: %w", err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Credential stored securely in Harbor Cloud.\n")
-		fmt.Fprintf(cmd.OutOrStdout(), "Sync to another machine: harbor auth sync %s\n", connector)
+		// Also write to Harbor Keychain so this machine can use it immediately.
+		if err := auth.SaveToKeychain(connector, credential, cfg.APIKey); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not write to Harbor Keychain: %v\n", err)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Credential stored in Harbor Cloud and Harbor Keychain.\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Available on any machine after: harbor login\n")
 		return nil
 	}
 
@@ -110,11 +111,13 @@ func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
 func newAuthSyncCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync [connector]",
-		Short: "Sync cloud credentials to local OS keychain",
-		Long: `Download encrypted credentials from Harbor Cloud, decrypt them
-client-side using your Harbor password, and store in the local OS keychain.
+		Short: "Sync cloud credentials to Harbor Keychain (and OS keychain if available)",
+		Long: `Download encrypted credentials from Harbor Cloud, decrypt them client-side
+using your Harbor API key, and write to the local Harbor Keychain
+(~/.harbor/keychain.json).
 
-Your password is used only for local decryption and is never sent to the server.
+No password prompt — decryption uses the API key stored by 'harbor login'.
+If the OS keychain is available, credentials are also written there.
 
 Examples:
   harbor auth sync                # Sync all cloud credentials
@@ -126,17 +129,8 @@ Examples:
 				return fmt.Errorf("not logged in — run 'harbor login' first")
 			}
 
-			password, err := promptSecret("Harbor password (for decryption)")
-			if err != nil {
-				return fmt.Errorf("reading password: %w", err)
-			}
-			if password == "" {
-				return fmt.Errorf("password is required")
-			}
-			fmt.Fprintln(cmd.OutOrStdout())
-
 			if len(args) == 1 {
-				return syncOne(cmd, cfg, args[0], password)
+				return syncOne(cmd, cfg, args[0])
 			}
 
 			entries, err := cloudauth.ListCloudCredentials(cfg)
@@ -150,7 +144,7 @@ Examples:
 
 			synced, failed := 0, 0
 			for _, e := range entries {
-				if err := syncOne(cmd, cfg, e.Connector, password); err != nil {
+				if err := syncOne(cmd, cfg, e.Connector); err != nil {
 					fmt.Fprintf(cmd.OutOrStdout(), "  ✗ %s: %v\n", e.Connector, err)
 					failed++
 				} else {
@@ -167,19 +161,23 @@ Examples:
 	}
 }
 
-func syncOne(cmd *cobra.Command, cfg *cloudauth.Config, connector, password string) error {
+// syncOne downloads one connector credential from cloud, decrypts with API key,
+// and writes to Harbor Keychain + OS keychain (best-effort).
+func syncOne(cmd *cobra.Command, cfg *cloudauth.Config, connector string) error {
 	blob, err := cloudauth.FetchCloudCredentialBlob(connector, cfg)
 	if err != nil {
 		return err
 	}
-	plaintext, err := cloudauth.DecryptCredential(blob, password)
+	plaintext, err := cloudauth.DecryptCredential(blob, cfg.APIKey)
 	if err != nil {
 		return err
 	}
-	if err := auth.Store(connector, plaintext); err != nil {
-		return fmt.Errorf("storing in keychain: %w", err)
+	if err := auth.SaveToKeychain(connector, plaintext, cfg.APIKey); err != nil {
+		return fmt.Errorf("writing Harbor Keychain: %w", err)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s → stored in OS keychain\n", connector)
+	// Best-effort: also write to OS keychain (may fail in sandboxes — that's OK).
+	_ = auth.Store(connector, plaintext)
+	fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s → Harbor Keychain\n", connector)
 	return nil
 }
 

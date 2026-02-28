@@ -3,6 +3,14 @@ name: Deploy harbor-gateway
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'assets/**'
+      - 'docs/**'
+      - 'schemas/**'
+      - 'sdk/**'
+      - 'install.sh'
+      - '.goreleaser.yaml'
 
 jobs:
   test:

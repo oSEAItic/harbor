@@ -1,0 +1,29 @@
+# fly.toml — harbor-gateway (internal execution layer)
+# Deploy: fly deploy -c deploy/fly.gateway.toml
+# This app is not public — harbor-cloud reaches it via Fly private network:
+#   http://harbor-gateway.internal:8080
+
+app            = "harbor-gateway"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile.gateway"
+
+[env]
+  PORT = "8080"
+
+# Secrets (set via `fly secrets set -a harbor-gateway`):
+#   HARBOR_GATEWAY_API_KEYS = <same value as HARBOR_GATEWAY_SERVICE_KEY in harbor-cloud>
+
+[http_service]
+  internal_port       = 8080
+  force_https         = false   # internal-only, no public TLS needed
+  auto_stop_machines  = "stop"
+  auto_start_machines = true
+  # Keep 1 machine alive — connectors loaded in memory, no cold start for tool calls
+  min_machines_running = 1
+
+[[vm]]
+  memory   = "512mb"
+  cpu_kind = "shared"
+  cpus     = 1

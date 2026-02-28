@@ -149,7 +149,9 @@ harbor tools export --format mcp
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
-或从源码安装：
+> **无需任何运行时。** 安装脚本会为当前平台（Linux/macOS、amd64/arm64）下载预编译的静态 binary。运行 Harbor **不需要** Go、Node.js 或 Python —— 只有在开发连接器时才需要。
+
+或从源码安装（需要 Go）：
 ```bash
 go install github.com/oseaitic/harbor/cmd/harbor@latest
 ```

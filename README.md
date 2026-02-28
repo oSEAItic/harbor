@@ -149,7 +149,9 @@ Emits tool schemas from Harbor's internal Tool IR. OpenAI function-calling and M
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
-Or from source:
+> **No runtime required.** The installer downloads a pre-compiled static binary for your platform (Linux/macOS, amd64/arm64). Go, Node.js, and Python are **not** needed to run Harbor — only to build connectors.
+
+Or from source (requires Go):
 ```bash
 go install github.com/oseaitic/harbor/cmd/harbor@latest
 ```

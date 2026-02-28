@@ -38,11 +38,11 @@ func PublishToCloud(name string, cfg *cloudauth.Config) (sha256 string, size int
 		return "", 0, fmt.Errorf("reading connector bundle: %w", err)
 	}
 
-	// Extract schema by running --describe
-	cmd := exec.Command("node", binPath, "--describe")
+	// Extract schema by running --describe directly (same as connector/tools.go)
+	cmd := exec.Command(binPath, "--describe")
 	schemaBytes, err := cmd.Output()
 	if err != nil {
-		return "", 0, fmt.Errorf("extracting connector schema (node %s --describe): %w", binPath, err)
+		return "", 0, fmt.Errorf("extracting connector schema (%s --describe): %w", binPath, err)
 	}
 
 	// Validate schema is a non-empty JSON array

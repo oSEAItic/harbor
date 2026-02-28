@@ -94,7 +94,7 @@ func newRegisterCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&endpoint, "endpoint", "https://cloud.oseaitic.com", "Harbor Cloud endpoint")
+	cmd.Flags().StringVar(&endpoint, "endpoint", "https://harbor-cloud.oseaitic.com", "Harbor Cloud endpoint")
 	return cmd
 }
 

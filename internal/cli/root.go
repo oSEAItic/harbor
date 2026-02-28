@@ -59,6 +59,7 @@ Quick start:
 		newScaffoldCmd(),
 		newBuildCmd(),
 		newUninstallCmd(),
+		newPublishCmd(),
 	)
 
 	// ── Advanced ─────────────────────────────────────────────────

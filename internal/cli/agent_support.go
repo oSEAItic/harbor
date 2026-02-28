@@ -14,6 +14,7 @@ import (
 	"github.com/oseaitic/harbor/internal/connector"
 	"github.com/oseaitic/harbor/internal/harborhome"
 	"github.com/oseaitic/harbor/internal/protocol"
+	"github.com/oseaitic/harbor/internal/registry"
 )
 
 type commandTemplate struct {
@@ -81,12 +82,19 @@ type doctorReport struct {
 	Issues                []string                `json:"issues,omitempty"`
 }
 
+type catalogEntry struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	Version     string `json:"version"`
+}
+
 type capabilitiesReport struct {
 	GeneratedAt            time.Time             `json:"generated_at"`
 	Version                string                `json:"version"`
 	RecommendedIntegration string                `json:"recommended_integration"`
 	InstallHints           []string              `json:"install_hints"`
 	CommandTemplates       []commandTemplate     `json:"command_templates"`
+	AvailableCatalog       []catalogEntry        `json:"available_catalog"`
 	Connectors             []connectorCapability `json:"connectors"`
 	ConnectorDevelopment   connectorDevGuide     `json:"connector_development"`
 	CommonErrorRecovery    []errorHint           `json:"common_error_recovery"`
@@ -105,6 +113,12 @@ func buildCapabilitiesReport(version string) capabilitiesReport {
 	}
 	sort.Strings(installed)
 
+	catalog := registry.ListCatalog()
+	catalogEntries := make([]catalogEntry, len(catalog))
+	for i, e := range catalog {
+		catalogEntries[i] = catalogEntry{ID: e.ID, Description: e.Description, Version: e.Version}
+	}
+
 	return capabilitiesReport{
 		GeneratedAt:            time.Now().UTC(),
 		Version:                version,
@@ -115,6 +129,7 @@ func buildCapabilitiesReport(version string) capabilitiesReport {
 			"Discover tools for function calling: harbor tools export --format openai",
 		},
 		CommandTemplates:       defaultCommandTemplates(),
+		AvailableCatalog:       catalogEntries,
 		Connectors:             collectConnectorCapabilities(installed),
 		ConnectorDevelopment:   defaultConnectorDevGuide(),
 		CommonErrorRecovery:    defaultErrorHints(),

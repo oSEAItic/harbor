@@ -25,25 +25,31 @@ func Install(name string, opts InstallOptions) error {
 
 	entry := LookupCatalog(name)
 	if entry == nil {
-		// Not in catalog — try the user's cloud registry if logged in.
-		cfg, err := cloudauth.Load()
-		if err == nil {
-			fmt.Printf("  %q not in catalog, checking your cloud registry...\n", name)
-			if cloudErr := InstallFromCloud(name, cfg); cloudErr == nil {
-				fmt.Printf("Connector %s installed from cloud.\n", name)
-				return nil
-			}
-		}
 		available := ListCatalog()
 		ids := make([]string, len(available))
 		for i, e := range available {
 			ids[i] = e.ID
 		}
-		hint := ""
-		if err != nil {
-			hint = "\n(tip: run 'harbor login' to enable cloud connectors)"
+
+		// Not in catalog — try the user's cloud registry if logged in.
+		cfg, err := cloudauth.Load()
+		if err == nil {
+			fmt.Printf("  %q not in public catalog, checking your cloud registry...\n", name)
+			if cloudErr := InstallFromCloud(name, cfg); cloudErr == nil {
+				fmt.Printf("Connector %s installed from cloud.\n", name)
+				return nil
+			}
+			// Cloud was checked and also doesn't have it — give a definitive answer.
+			return fmt.Errorf(
+				"connector %q not found in public catalog or your cloud registry.\n"+
+					"Public catalog: %v\n"+
+					"Run 'harbor list' to see all available connectors (including yours in cloud).",
+				name, ids)
 		}
-		return fmt.Errorf("connector %q not found in catalog. Available: %v%s", name, ids, hint)
+		return fmt.Errorf(
+			"connector %q not found in public catalog. Available: %v\n"+
+				"(tip: run 'harbor login' to also search your private cloud registry)",
+			name, ids)
 	}
 
 	// Check runtime prerequisite

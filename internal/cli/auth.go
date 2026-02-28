@@ -1,84 +1,236 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/oseaitic/harbor/internal/auth"
+	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth [connector]",
-		Short: "Manage connector credentials (stored in OS keychain)",
+		Short: "Manage connector credentials",
 		Long: `Manage authentication credentials for connectors.
 
-Credentials are stored securely in your OS keychain (macOS Keychain,
-Linux secret-service, Windows Credential Manager).
+When logged in to Harbor Cloud, credentials are stored encrypted in the cloud
+using client-side AES-256-GCM (PBKDF2 key from your Harbor password).
+The server stores only ciphertext and cannot decrypt it.
 
-Without arguments, lists all stored credentials.
+When not logged in, credentials fall back to the local OS keychain.
+
+Use 'harbor auth sync' to pull cloud credentials into the local OS keychain
+for use with locally-executed private connectors.
 
 Examples:
-  harbor auth                     # List all stored credentials
-  harbor auth github-mcp          # Store API key for github-mcp
+  harbor auth github-mcp          # Store credential (cloud if logged in)
+  harbor auth github-mcp --local  # Force store in local OS keychain
+  harbor auth sync                # Sync all cloud credentials to local keychain
+  harbor auth sync github-mcp     # Sync one connector to local keychain
   harbor auth status              # List all stored credentials
-  harbor auth status github-mcp   # Check if credentials exist
-  harbor auth delete github-mcp   # Remove stored credentials`,
+  harbor auth status github-mcp   # Check if credential exists
+  harbor auth delete github-mcp   # Remove credential (cloud + local)`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// No args → list all credentials
 			if len(args) == 0 {
 				return authList(cmd)
 			}
-
-			name := args[0]
-			reader := bufio.NewReader(os.Stdin)
-
-			fmt.Printf("Configuring auth for: %s\n", name)
-			fmt.Print("API Key: ")
-			key, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("reading input: %w", err)
-			}
-			key = strings.TrimSpace(key)
-
-			if err := auth.Store(name, key); err != nil {
-				return fmt.Errorf("storing credentials: %w", err)
-			}
-
-			fmt.Printf("Credentials stored for %s.\n", name)
-			return nil
+			local, _ := cmd.Flags().GetBool("local")
+			return authStore(cmd, args[0], local)
 		},
 	}
 
-	cmd.AddCommand(&cobra.Command{
-		Use:   "status [connector]",
-		Short: "Check credential status (all or specific connector)",
-		Example: `  harbor auth status              # List all
-  harbor auth status github-mcp   # Check specific`,
+	cmd.Flags().Bool("local", false, "Force store in local OS keychain instead of cloud")
+
+	cmd.AddCommand(newAuthSyncCmd())
+	cmd.AddCommand(newAuthStatusCmd())
+	cmd.AddCommand(newAuthDeleteCmd())
+
+	return cmd
+}
+
+// authStore stores a connector credential.
+// If logged in and not --local: encrypts client-side and stores in cloud.
+// Otherwise: stores in local OS keychain.
+func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
+	cfg, loginErr := cloudauth.Load()
+	useCloud := loginErr == nil && !forceLocal
+
+	target := "OS keychain"
+	if useCloud {
+		target = fmt.Sprintf("Harbor Cloud (%s)", cfg.Endpoint)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Storing credential for: %s\n", connector)
+	fmt.Fprintf(cmd.OutOrStdout(), "Target: %s\n", target)
+	if useCloud {
+		fmt.Fprintln(cmd.OutOrStdout(), "         Use --local to store in OS keychain instead.")
+	}
+	fmt.Fprintln(cmd.OutOrStdout())
+
+	credential, err := promptSecret("Connector API key")
+	if err != nil {
+		return fmt.Errorf("reading credential: %w", err)
+	}
+	if credential == "" {
+		return fmt.Errorf("credential is required")
+	}
+
+	if useCloud {
+		password, err := promptSecret("Harbor password (used locally to encrypt — never sent to server)")
+		if err != nil {
+			return fmt.Errorf("reading password: %w", err)
+		}
+		if password == "" {
+			return fmt.Errorf("password is required for cloud encryption")
+		}
+
+		fmt.Fprintf(cmd.OutOrStdout(), "\nEncrypting and uploading...\n")
+		if err := cloudauth.StoreCloudCredential(connector, credential, password, cfg); err != nil {
+			return fmt.Errorf("storing cloud credential: %w", err)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Credential stored securely in Harbor Cloud.\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Sync to another machine: harbor auth sync %s\n", connector)
+		return nil
+	}
+
+	if err := auth.Store(connector, credential); err != nil {
+		return fmt.Errorf("storing credential: %w", err)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Credential stored in OS keychain for %s.\n", connector)
+	return nil
+}
+
+// newAuthSyncCmd returns the 'harbor auth sync [connector]' subcommand.
+func newAuthSyncCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "sync [connector]",
+		Short: "Sync cloud credentials to local OS keychain",
+		Long: `Download encrypted credentials from Harbor Cloud, decrypt them
+client-side using your Harbor password, and store in the local OS keychain.
+
+Your password is used only for local decryption and is never sent to the server.
+
+Examples:
+  harbor auth sync                # Sync all cloud credentials
+  harbor auth sync github-mcp     # Sync one connector`,
 		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := cloudauth.Load()
+			if err != nil {
+				return fmt.Errorf("not logged in — run 'harbor login' first")
+			}
+
+			password, err := promptSecret("Harbor password (for decryption)")
+			if err != nil {
+				return fmt.Errorf("reading password: %w", err)
+			}
+			if password == "" {
+				return fmt.Errorf("password is required")
+			}
+			fmt.Fprintln(cmd.OutOrStdout())
+
+			if len(args) == 1 {
+				return syncOne(cmd, cfg, args[0], password)
+			}
+
+			entries, err := cloudauth.ListCloudCredentials(cfg)
+			if err != nil {
+				return fmt.Errorf("listing cloud credentials: %w", err)
+			}
+			if len(entries) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No cloud credentials found.")
+				return nil
+			}
+
+			synced, failed := 0, 0
+			for _, e := range entries {
+				if err := syncOne(cmd, cfg, e.Connector, password); err != nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "  ✗ %s: %v\n", e.Connector, err)
+					failed++
+				} else {
+					synced++
+				}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "\nSynced %d credential(s)", synced)
+			if failed > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), ", %d failed", failed)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), ".")
+			return nil
+		},
+	}
+}
+
+func syncOne(cmd *cobra.Command, cfg *cloudauth.Config, connector, password string) error {
+	blob, err := cloudauth.FetchCloudCredentialBlob(connector, cfg)
+	if err != nil {
+		return err
+	}
+	plaintext, err := cloudauth.DecryptCredential(blob, password)
+	if err != nil {
+		return err
+	}
+	if err := auth.Store(connector, plaintext); err != nil {
+		return fmt.Errorf("storing in keychain: %w", err)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s → stored in OS keychain\n", connector)
+	return nil
+}
+
+// newAuthStatusCmd returns the 'harbor auth status [connector]' subcommand.
+func newAuthStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "status [connector]",
+		Short:   "Check credential status (local keychain + cloud)",
+		Example: "  harbor auth status\n  harbor auth status github-mcp",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return authList(cmd)
 			}
 			name := args[0]
-			_, err := auth.Retrieve(name)
-			if err != nil {
-				fmt.Printf("%s: not configured\n", name)
-				return nil
+
+			_, localErr := auth.Retrieve(name)
+			localOK := localErr == nil
+
+			cloudOK := false
+			if cfg, err := cloudauth.Load(); err == nil {
+				if entries, err := cloudauth.ListCloudCredentials(cfg); err == nil {
+					for _, e := range entries {
+						if e.Connector == name {
+							cloudOK = true
+							break
+						}
+					}
+				}
 			}
-			fmt.Printf("%s: configured\n", name)
+
+			switch {
+			case localOK && cloudOK:
+				fmt.Fprintf(cmd.OutOrStdout(), "%s: configured (local keychain + cloud)\n", name)
+			case localOK:
+				fmt.Fprintf(cmd.OutOrStdout(), "%s: configured (local keychain only)\n", name)
+			case cloudOK:
+				fmt.Fprintf(cmd.OutOrStdout(), "%s: configured (cloud only — run 'harbor auth sync %s' to use locally)\n", name, name)
+			default:
+				fmt.Fprintf(cmd.OutOrStdout(), "%s: not configured\n", name)
+			}
 			return nil
 		},
-	})
+	}
+}
 
-	cmd.AddCommand(&cobra.Command{
+// newAuthDeleteCmd returns the 'harbor auth delete <connector>' subcommand.
+func newAuthDeleteCmd() *cobra.Command {
+	return &cobra.Command{
 		Use:   "delete <connector>",
-		Short: "Remove stored credentials for a connector",
+		Short: "Remove stored credentials (local keychain + cloud)",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return fmt.Errorf("requires a connector name, e.g.: harbor auth delete github-mcp")
@@ -87,29 +239,82 @@ Examples:
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			if err := auth.Delete(name); err != nil {
-				return fmt.Errorf("deleting credentials for %s: %w", name, err)
+			removed := false
+
+			if err := auth.Delete(name); err == nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "Removed from local keychain: %s\n", name)
+				removed = true
 			}
-			fmt.Printf("Credentials removed for %s.\n", name)
+
+			if cfg, err := cloudauth.Load(); err == nil {
+				if err := cloudauth.DeleteCloudCredential(name, cfg); err == nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "Removed from Harbor Cloud: %s\n", name)
+					removed = true
+				}
+			}
+
+			if !removed {
+				fmt.Fprintf(cmd.OutOrStdout(), "No credential found for %s.\n", name)
+			}
 			return nil
 		},
-	})
-
-	return cmd
+	}
 }
 
 func authList(cmd *cobra.Command) error {
-	entries := auth.List()
-	if len(entries) == 0 {
+	local := auth.List()
+
+	var cloudEntries []cloudauth.CredentialEntry
+	if cfg, err := cloudauth.Load(); err == nil {
+		cloudEntries, _ = cloudauth.ListCloudCredentials(cfg)
+	}
+
+	if len(local) == 0 && len(cloudEntries) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No credentials stored.")
-		fmt.Fprintln(cmd.OutOrStdout(), "\nStore one with: harbor auth <name>")
+		fmt.Fprintln(cmd.OutOrStdout(), "\nStore one with: harbor auth <connector>")
 		return nil
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "%d credential(s) stored:\n\n", len(entries))
-	for _, e := range entries {
-		age := formatDuration(time.Since(e.CreatedAt))
-		fmt.Fprintf(cmd.OutOrStdout(), "  %s  (stored %s ago)\n", e.Name, age)
+	if len(local) > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "Local keychain (%d):\n", len(local))
+		for _, e := range local {
+			age := formatDuration(time.Since(e.CreatedAt))
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s  (stored %s ago)\n", e.Name, age)
+		}
 	}
+
+	if len(cloudEntries) > 0 {
+		if len(local) > 0 {
+			fmt.Fprintln(cmd.OutOrStdout())
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Harbor Cloud (%d):\n", len(cloudEntries))
+		for _, e := range cloudEntries {
+			age := formatDuration(time.Since(e.UpdatedAt))
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s  (stored %s ago)\n", e.Connector, age)
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "\nRun 'harbor auth sync' to copy cloud credentials to local keychain.")
+	}
+
 	return nil
+}
+
+// promptSecret reads a secret from the terminal without echo.
+// Falls back to line-buffered stdin if not running in a terminal.
+func promptSecret(prompt string) (string, error) {
+	fmt.Printf("%s: ", prompt)
+	if term.IsTerminal(int(syscall.Stdin)) {
+		secret, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(secret)), nil
+	}
+	// Non-terminal fallback (piped input / tests)
+	var line string
+	_, err := fmt.Scanln(&line)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
 }

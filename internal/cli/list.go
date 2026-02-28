@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/oseaitic/harbor/internal/connector"
 	"github.com/oseaitic/harbor/internal/registry"
 	"github.com/spf13/cobra"
@@ -49,6 +51,23 @@ func newListCmd() *cobra.Command {
 						fmt.Printf("  * %-12s  %s  (local)\n", name, desc)
 					} else {
 						fmt.Printf("  * %-12s  (no description)  (local)\n", name)
+					}
+				}
+			}
+
+			// Show cloud connectors if logged in
+			if cfg, err := cloudauth.Load(); err == nil {
+				cloud, err := registry.ListCloudConnectors(cfg)
+				if err == nil && len(cloud) > 0 {
+					fmt.Println()
+					fmt.Println("Cloud connectors (run 'harbor install <name>' to use locally):")
+					for _, c := range cloud {
+						age := time.Since(c.UpdatedAt).Round(time.Hour)
+						mark := "  "
+						if installedSet[c.Name] {
+							mark = "* "
+						}
+						fmt.Printf("  %s%-12s  %s  %v ago\n", mark, c.Name, formatBytes(c.Size), age)
 					}
 				}
 			}

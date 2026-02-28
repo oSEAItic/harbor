@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/spf13/cobra"
 )
@@ -80,6 +81,31 @@ Examples:
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Logged in to %s\n", cfg.Endpoint)
+
+			// Auto-sync connector credentials from cloud to Harbor Keychain.
+			// Silent on error — credentials can always be synced manually with 'harbor auth sync'.
+			if entries, err := cloudauth.ListCloudCredentials(&cfg); err == nil && len(entries) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "Syncing %d connector credential(s) to Harbor Keychain...\n", len(entries))
+				synced := 0
+				for _, e := range entries {
+					blob, err := cloudauth.FetchCloudCredentialBlob(e.Connector, &cfg)
+					if err != nil {
+						continue
+					}
+					plaintext, err := cloudauth.DecryptCredential(blob, cfg.APIKey)
+					if err != nil {
+						continue
+					}
+					if auth.SaveToKeychain(e.Connector, plaintext, cfg.APIKey) == nil {
+						_ = auth.Store(e.Connector, plaintext) // best-effort OS keychain
+						synced++
+					}
+				}
+				if synced > 0 {
+					fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %d credential(s) ready for local use\n", synced)
+				}
+			}
+
 			return nil
 		},
 	}

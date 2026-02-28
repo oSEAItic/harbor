@@ -35,6 +35,11 @@ func Store(connector string, secret string) error {
 }
 
 // Retrieve loads a stored credential for a connector.
+// Resolution order:
+//  1. OS keychain (macOS/Linux/Windows)
+//  2. Harbor Keychain (~/.harbor/keychain.json, AES-256-GCM encrypted with API key)
+//     Written by 'harbor login' (auto-sync) or 'harbor auth sync'.
+//
 // If the credential exists in the keychain but not in the index,
 // it is automatically backfilled (handles pre-index credentials).
 func Retrieve(connector string) (string, error) {
@@ -44,16 +49,23 @@ func Retrieve(connector string) (string, error) {
 	secret, err := keyring.Get(serviceName, connector)
 	if err == nil {
 		indexAdd(connector) // backfill if not already indexed
+		return secret, nil
 	}
-	return secret, err
+	// OS keychain unavailable or credential not found — try Harbor Keychain.
+	apiKey := loadAPIKey()
+	if apiKey == "" {
+		return "", fmt.Errorf("credential for %q not found (OS keychain failed, not logged in to Harbor Cloud)", connector)
+	}
+	return LoadFromKeychain(connector, apiKey)
 }
 
-// Delete removes a stored credential.
+// Delete removes a stored credential from OS keychain and Harbor Keychain.
 func Delete(connector string) error {
 	if err := keyring.Delete(serviceName, connector); err != nil {
 		return err
 	}
 	indexRemove(connector)
+	RemoveFromKeychain(connector)
 	return nil
 }
 
@@ -74,6 +86,23 @@ func List() []KeyEntry {
 		indexSave(valid)
 	}
 	return valid
+}
+
+// loadAPIKey reads the Harbor API key from ~/.harbor/cloud.json.
+// Returns "" if not logged in or the file cannot be read.
+// Avoids importing cloudauth to prevent import cycles.
+func loadAPIKey() string {
+	data, err := os.ReadFile(harborhome.Path("cloud.json"))
+	if err != nil {
+		return ""
+	}
+	var cfg struct {
+		APIKey string `json:"api_key"`
+	}
+	if json.Unmarshal(data, &cfg) != nil {
+		return ""
+	}
+	return cfg.APIKey
 }
 
 // --- index file helpers ---

@@ -50,6 +50,7 @@ Quick start:
 		newInstallCmd(),
 		newMCPCmd(version),
 		newAuthCmd(),
+		newRegisterCmd(),
 		newLoginCmd(),
 		newLogoutCmd(),
 	)

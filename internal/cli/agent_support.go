@@ -127,6 +127,8 @@ func buildCapabilitiesReport(version string) capabilitiesReport {
 			"Use MCP first: harbor mcp",
 			"Fetch data directly: harbor get <connector.resource> --param key=value",
 			"Discover tools for function calling: harbor tools export --format openai",
+			"Auth: after 'harbor login', connector credentials sync automatically — DO NOT store Harbor API key as connector auth",
+			"harbor auth <connector> stores the CONNECTOR's own token (GitHub PAT, Kuse JWT, etc.) — not your Harbor API key",
 		},
 		CommandTemplates:       defaultCommandTemplates(),
 		AvailableCatalog:       catalogEntries,
@@ -370,9 +372,12 @@ func defaultErrorHints() []errorHint {
 			Recovery: "Use `harbor tools export` and pass each required `--param key=value`",
 		},
 		{
-			Code:     protocol.ErrAuthRequired,
-			Meaning:  "Connector requires credentials",
-			Recovery: "Run `harbor auth <connector>` to store credentials",
+			Code:    protocol.ErrAuthRequired,
+			Meaning: "Connector requires credentials — the CONNECTOR'S own API token (not your Harbor API key)",
+			Recovery: "If logged in to Harbor Cloud, try `harbor auth sync` first — your credentials may already be stored and just need syncing. " +
+				"Otherwise run `harbor auth <connector>` and enter the CONNECTOR's own token " +
+				"(e.g. GitHub PAT, Kuse JWT — NOT your Harbor API key). " +
+				"IMPORTANT: harbor auth <connector> stores the THIRD-PARTY service token, not a Harbor credential.",
 		},
 		{
 			Code:     protocol.ErrExecution,

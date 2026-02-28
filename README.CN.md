@@ -146,12 +146,12 @@ harbor tools export --format mcp
 ## 安装
 
 ```bash
-# 从源码安装
-go install github.com/oseaitic/harbor/cmd/harbor@latest
+curl -fsSL https://harbor.oseaitic.com/install | bash
+```
 
-# 或本地构建
-make build
-./bin/harbor version
+或从源码安装：
+```bash
+go install github.com/oseaitic/harbor/cmd/harbor@latest
 ```
 
 可选：覆盖 Harbor 的本地数据路径（连接器、记忆、Schema、指标）：
@@ -159,6 +159,29 @@ make build
 ```bash
 export HARBOR_HOME="$PWD/.harbor"
 ```
+
+## Harbor Cloud
+
+连接到 Harbor Cloud，在云端存储凭据并发布私有连接器 —— 可从任意机器或 Agent 会话访问。
+
+```bash
+# 登录
+harbor login
+
+# 将连接器 API Key 存入云端（客户端加密，服务器不可见明文）
+harbor auth my-connector
+
+# 在另一台机器上：从云端拉取凭据到本地钥匙串
+harbor auth sync my-connector
+
+# 将私有连接器发布到你的账户
+harbor publish my-connector
+
+# 查看凭据状态（本地 + 云端）
+harbor auth status
+```
+
+凭据在上传前使用 AES-256-GCM 客户端加密。服务器只存储密文，无法解密。
 
 ## 快速开始
 

@@ -95,6 +95,10 @@ func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
 		if err := auth.SaveToKeychain(connector, credential, cfg.APIKey); err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not write to Harbor Keychain: %v\n", err)
 		}
+		// Best-effort: also update OS keychain to keep it in sync.
+		// Without this, a stale OS keychain entry would shadow the new credential
+		// (OS keychain takes precedence over Harbor Keychain in Retrieve()).
+		_ = auth.Store(connector, credential)
 		fmt.Fprintf(cmd.OutOrStdout(), "Credential stored in Harbor Cloud and Harbor Keychain.\n")
 		fmt.Fprintf(cmd.OutOrStdout(), "Available on any machine after: harbor login\n")
 		return nil

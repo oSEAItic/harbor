@@ -1,3 +1,13 @@
+// Package main is the harbor-gateway HTTP server.
+// It executes connectors and serves the /run endpoint to harbor-cloud (or any authorized caller).
+//
+// Required environment variables in production:
+//
+//	HARBOR_GATEWAY_API_KEYS    comma-separated API keys (e.g. "key1,key2")
+//	HARBOR_GATEWAY_JWT_SECRET  HS256 signing secret
+//
+// WARNING: if both variables are unset, the gateway allows unauthenticated access.
+// Always configure at least one in production deployments.
 package main
 
 import (

@@ -26,8 +26,18 @@ func NewLocalExecutor() *LocalExecutor {
 // Execute retrieves auth from the keychain and runs the connector binary.
 // If the connector is not installed and the user is logged in to Harbor Cloud,
 // it automatically installs the connector from the cloud registry before retrying.
+//
+// Auth resolution order:
+//  1. OS keychain (set via: harbor auth <connector>)
+//  2. HARBOR_AUTH_<CONNECTOR_UPPER> env var — useful in CI or sandboxed
+//     environments where the OS keychain is unavailable.
+//     Example: HARBOR_AUTH_KUSE_HIVE=<key> harbor get --local kuse-hive.trace
 func (e *LocalExecutor) Execute(_ context.Context, req protocol.Request) (*protocol.Response, error) {
 	token, _ := auth.Retrieve(req.Connector)
+	if token == "" {
+		envKey := "HARBOR_AUTH_" + strings.ToUpper(strings.ReplaceAll(req.Connector, "-", "_"))
+		token = os.Getenv(envKey)
+	}
 	req.Auth = token
 
 	resp, err := connector.Execute(req)
@@ -38,6 +48,10 @@ func (e *LocalExecutor) Execute(_ context.Context, req protocol.Request) (*proto
 				fmt.Fprintf(os.Stderr, "  installed %q from cloud.\n", req.Connector)
 				// Re-retrieve auth in case it is now available after install
 				token, _ = auth.Retrieve(req.Connector)
+				if token == "" {
+					envKey := "HARBOR_AUTH_" + strings.ToUpper(strings.ReplaceAll(req.Connector, "-", "_"))
+					token = os.Getenv(envKey)
+				}
 				req.Auth = token
 				resp, err = connector.Execute(req)
 			}

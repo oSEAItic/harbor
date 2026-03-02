@@ -18,6 +18,10 @@ import (
 const (
 	maxIndexEntries = 500
 	pruneMaxAge     = 7 * 24 * time.Hour // 7 days
+
+	// SchemaNote identifies connector-level notes written by harbor_remember.
+	// Notes skip deduplication so each session's conclusions accumulate.
+	SchemaNote = "harbor.note.v1"
 )
 
 // Store manages memory objects on the local filesystem.
@@ -40,7 +44,32 @@ func NewStoreAt(dir string) (*Store, error) {
 	if err := os.MkdirAll(objDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating memory dir: %w", err)
 	}
-	return &Store{dir: dir, objDir: objDir}, nil
+	s := &Store{dir: dir, objDir: objDir}
+	s.maybeRebuildIndex()
+	return s, nil
+}
+
+// maybeRebuildIndex checks whether the index is missing entries for existing
+// objects (e.g. objects saved by an older binary that didn't maintain the index)
+// and triggers a full rebuild if needed. Called once at store creation.
+func (s *Store) maybeRebuildIndex() {
+	entries, err := os.ReadDir(s.objDir)
+	if err != nil {
+		return
+	}
+	var objCount int
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			objCount++
+		}
+	}
+	if objCount == 0 {
+		return
+	}
+	idx := loadIndex(s.dir)
+	if len(idx.Entries) < objCount {
+		rebuildIndex(s.dir)
+	}
 }
 
 // Save persists a memory object and updates the index. Returns the object ID.
@@ -74,18 +103,20 @@ func (s *Store) Save(obj *Object) (string, error) {
 	// Update index
 	idx := loadIndex(s.dir)
 
-	// Remove any existing entry with same connector+resource+params
-	key := canonicalKey(obj.Connector, obj.Resource, obj.Params)
-	filtered := idx.Entries[:0]
-	for _, e := range idx.Entries {
-		if canonicalKey(e.Connector, e.Resource, e.Params) != key {
-			filtered = append(filtered, e)
-		} else {
-			// Remove old object file
-			os.Remove(filepath.Join(s.objDir, e.ID+".json"))
+	// Notes (harbor.note.v1) accumulate — each call creates a new entry.
+	// All other schemas deduplicate: only the latest fetch per connector+resource+params is kept.
+	if obj.Schema != SchemaNote {
+		key := canonicalKey(obj.Connector, obj.Resource, obj.Params)
+		filtered := idx.Entries[:0]
+		for _, e := range idx.Entries {
+			if canonicalKey(e.Connector, e.Resource, e.Params) != key {
+				filtered = append(filtered, e)
+			} else {
+				os.Remove(filepath.Join(s.objDir, e.ID+".json"))
+			}
 		}
+		idx.Entries = filtered
 	}
-	idx.Entries = filtered
 
 	// Add new entry
 	idx.Entries = append(idx.Entries, IndexEntry{
@@ -118,6 +149,20 @@ func (s *Store) Save(obj *Object) (string, error) {
 	}
 
 	return obj.ID, nil
+}
+
+// SaveNote persists a connector-level analysis note written by an agent via harbor_remember.
+// Notes use Resource="_context" and SchemaNote to distinguish them from data fetch objects.
+// Multiple notes for the same connector accumulate (no deduplication).
+func (s *Store) SaveNote(connector, note string) (string, error) {
+	obj := &Object{
+		Connector:  connector,
+		Resource:   "_context",
+		Schema:     SchemaNote,
+		TTLSeconds: 0, // notes never expire
+		Layers:     Layers{Summary: note},
+	}
+	return s.Save(obj)
 }
 
 // Get loads a full memory object by ID.

@@ -46,6 +46,7 @@ Quick start:
 	// ── Core ─────────────────────────────────────────────────────
 	addCmd(root, "core",
 		newGetCmd(outputFormat),
+		newRememberCmd(),
 		newListCmd(),
 		newInstallCmd(),
 		newMCPCmd(version),

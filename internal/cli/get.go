@@ -148,7 +148,9 @@ Examples:
 			// Inject cloud push if logged in — best-effort, never blocks the fetch.
 			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
 				pipelineOpts.CloudPush = func(key, content string) {
-					_ = cloudauth.PushMemory(key, content, cfg)
+					if err := cloudauth.PushMemory(key, content, cfg); err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] cloud sync failed for %s: %v\n", key, err)
+					}
 				}
 			}
 			result, err := pipeline.Execute(exec, connectorName, resource, paramMap, nil, pipelineOpts)

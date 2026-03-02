@@ -39,6 +39,14 @@ type MemoryRef struct {
 	Fresh    bool   `json:"fresh"`
 }
 
+// ContextRef is a pinned connector-level note written by an agent via harbor_remember.
+// Unlike recalls (time-sorted data history), context persists across sessions and
+// is always shown when the connector is accessed — similar to a CLAUDE.md for the connector.
+type ContextRef struct {
+	Summary string `json:"summary"`
+	Age     string `json:"age"`
+}
+
 // Meta contains provenance and versioning information.
 type Meta struct {
 	Source            string      `json:"source"`
@@ -50,6 +58,7 @@ type Meta struct {
 	Pagination        *PageInfo   `json:"pagination,omitempty"`
 	MemoryID          string      `json:"memory_id,omitempty"`
 	FromMemory        bool        `json:"from_memory,omitempty"`
+	Context           *ContextRef `json:"context,omitempty"`
 	Recalls           []MemoryRef `json:"recalls,omitempty"`
 	MemoryHint        string      `json:"memory_hint,omitempty"`
 }

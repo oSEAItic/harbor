@@ -14,6 +14,7 @@ import (
 	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/recall"
+	"github.com/oseaitic/harbor/internal/remember"
 	"github.com/oseaitic/harbor/internal/schema"
 )
 
@@ -156,8 +157,11 @@ func Run(cfg Config) error {
 	// Register harbor_recall tool for cross-session memory access
 	s.AddTool(recall.ToolDefinition(), recall.MakeHandler(memStore))
 
+	// Register harbor_remember tool for persisting agent analysis conclusions
+	s.AddTool(remember.ToolDefinition(), remember.MakeHandler(memStore))
+
 	// Serve to agent via stdio
-	fmt.Fprintf(os.Stderr, "harbor-proxy: serving %d upstream tools + harbor_learn_schema + harbor_recall to agent\n", len(toolsResult.Tools))
+	fmt.Fprintf(os.Stderr, "harbor-proxy: serving %d upstream tools + harbor_learn_schema + harbor_recall + harbor_remember to agent\n", len(toolsResult.Tools))
 	return server.ServeStdio(s)
 }
 

@@ -56,10 +56,11 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 				obj, err := store.Get(entry.ID)
 				if err == nil {
 					resp := responseFromMemory(obj)
-					// Inject related recalls from same connector (store.Query re-locks independently — safe)
+					// Inject context (pinned connector note) and data-fetch recalls.
+					resp.Meta.Context = buildContext(store, connectorName)
 					resp.Meta.Recalls = buildRecalls(store, connectorName, obj.ID)
-					if len(resp.Meta.Recalls) > 0 {
-						resp.Meta.MemoryHint = "Use harbor_remember to store analysis conclusions for next time."
+					if resp.Meta.Context == nil {
+						resp.Meta.MemoryHint = "When you finish analyzing this connector's data, call harbor_remember with a comprehensive note: what you found, patterns observed, and your conclusions. This becomes your persistent context — shown at the start of every future session with this connector."
 					}
 					return &Result{
 						Response: resp,
@@ -133,10 +134,12 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 				memID = id
 				compiled.Meta.MemoryID = id
 				compiled.Meta.FromMemory = false
-				// Inject related recalls (excluding entry just saved)
+				// Inject context (pinned connector note) and data-fetch recalls.
+				compiled.Meta.Context = buildContext(store, connectorName)
 				compiled.Meta.Recalls = buildRecalls(store, connectorName, id)
-				if len(compiled.Meta.Recalls) > 0 {
-					compiled.Meta.MemoryHint = "Use harbor_remember to store analysis conclusions for next time."
+				compiled.Meta.MemoryHint = "" // clear any value inherited from remote gateway
+				if compiled.Meta.Context == nil {
+					compiled.Meta.MemoryHint = "When you finish analyzing this connector's data, call harbor_remember with a comprehensive note: what you found, patterns observed, and your conclusions. This becomes your persistent context — shown at the start of every future session with this connector."
 				}
 			}
 		}
@@ -210,15 +213,33 @@ func ParseConnectorResource(arg string) (connectorName, resource string, err err
 	return parts[0], parts[1], nil
 }
 
-// buildRecalls queries the store for recent entries from the same connector,
-// excluding excludeID (the entry just saved or currently being served), and
-// returns up to 3 MemoryRef values. Cloud notes (cross-device) fill remaining slots.
+// buildContext returns the latest connector-level note (harbor.note.v1) for the
+// given connector, or nil if none exists. This is the agent's persistent
+// understanding of the connector's data source — shown on every access.
+func buildContext(store *memory.Store, connectorName string) *protocol.ContextRef {
+	results := store.Query(memory.QueryOptions{
+		Connector: connectorName,
+		Resource:  "_context",
+		Limit:     1,
+	})
+	if len(results) == 0 {
+		return nil
+	}
+	return &protocol.ContextRef{
+		Summary: results[0].Summary,
+		Age:     formatMemoryAge(results[0].CreatedAt),
+	}
+}
+
+// buildRecalls queries the store for recent data-fetch entries from the same
+// connector, excluding notes (those appear in Context) and the current entry.
+// Returns up to 3 MemoryRef values; cross-device cloud notes fill remaining slots.
 func buildRecalls(store *memory.Store, connectorName, excludeID string) []protocol.MemoryRef {
-	related := store.Query(memory.QueryOptions{Connector: connectorName, Limit: 5})
+	related := store.Query(memory.QueryOptions{Connector: connectorName, Limit: 8})
 	var refs []protocol.MemoryRef
 	for _, e := range related {
-		if e.ID == excludeID {
-			continue
+		if e.ID == excludeID || e.Schema == memory.SchemaNote {
+			continue // notes live in Context, not Recalls
 		}
 		refs = append(refs, protocol.MemoryRef{
 			ID:       e.ID,
@@ -257,6 +278,8 @@ func buildRecalls(store *memory.Store, connectorName, excludeID string) []protoc
 func formatMemoryAge(t time.Time) string {
 	d := time.Since(t)
 	switch {
+	case d < time.Minute:
+		return "just now"
 	case d < time.Hour:
 		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
 	case d < 24*time.Hour:

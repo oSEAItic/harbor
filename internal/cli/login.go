@@ -10,6 +10,7 @@ import (
 
 	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/cloudauth"
+	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/spf13/cobra"
 )
 
@@ -103,6 +104,19 @@ Examples:
 				}
 				if synced > 0 {
 					fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %d credential(s) ready for local use\n", synced)
+				}
+			}
+
+			// Pull cloud memory summaries to local notes cache.
+			// Silent on error — memories can be re-pulled on next login.
+			if notes, err := cloudauth.PullMemories(&cfg); err == nil && len(notes) > 0 {
+				noteStore := memory.NewNoteStore()
+				local := make([]memory.Note, 0, len(notes))
+				for _, n := range notes {
+					local = append(local, memory.Note{Key: n.Key, Content: n.Content, UpdatedAt: n.UpdatedAt})
+				}
+				if saveErr := noteStore.Save(local); saveErr == nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %d memory note(s) synced from cloud\n", len(notes))
 				}
 			}
 

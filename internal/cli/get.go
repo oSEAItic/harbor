@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/oseaitic/harbor/internal/connector"
 	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/executor"
@@ -138,12 +139,19 @@ Examples:
 			}
 
 			exec := executor.Resolve(local)
-			result, err := pipeline.Execute(exec, connectorName, resource, paramMap, nil, pipeline.Options{
+			pipelineOpts := pipeline.Options{
 				NoMemory: noMemory,
 				Refresh:  refresh,
 				Compile:  opts,
 				Errors:   pipeline.ErrorMode(errors),
-			})
+			}
+			// Inject cloud push if logged in — best-effort, never blocks the fetch.
+			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
+				pipelineOpts.CloudPush = func(key, content string) {
+					_ = cloudauth.PushMemory(key, content, cfg)
+				}
+			}
+			result, err := pipeline.Execute(exec, connectorName, resource, paramMap, nil, pipelineOpts)
 			if err != nil {
 				return err
 			}

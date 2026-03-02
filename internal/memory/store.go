@@ -22,9 +22,10 @@ const (
 
 // Store manages memory objects on the local filesystem.
 type Store struct {
-	dir    string
-	objDir string
-	mu     sync.Mutex
+	dir       string
+	objDir    string
+	mu        sync.Mutex
+	CloudPush func(key, content string) // nil = no-op; injected by CLI layer to avoid import cycle
 }
 
 // NewStore creates a memory store at HARBOR_HOME/memory (or ~/.harbor/memory).
@@ -107,6 +108,13 @@ func (s *Store) Save(obj *Object) (string, error) {
 
 	if err := saveIndex(s.dir, idx); err != nil {
 		return "", fmt.Errorf("saving index: %w", err)
+	}
+
+	// Best-effort async cloud push — non-blocking, never fails the local save.
+	if s.CloudPush != nil && obj.Layers.Summary != "" {
+		key := obj.Connector + "." + obj.Resource
+		summary := obj.Layers.Summary
+		go s.CloudPush(key, summary)
 	}
 
 	return obj.ID, nil

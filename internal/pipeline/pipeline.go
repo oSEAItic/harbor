@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/oseaitic/harbor/internal/connector"
 	harborctx "github.com/oseaitic/harbor/internal/context"
@@ -38,7 +39,8 @@ type Options struct {
 	Refresh       bool
 	Compile       harborctx.CompileOptions
 	Errors        ErrorMode
-	MaxVisibility string // govern Layer 3: field visibility ceiling (empty = no filtering)
+	MaxVisibility string                 // govern Layer 3: field visibility ceiling (empty = no filtering)
+	CloudPush     func(key, content string) // nil = no cloud sync; set by CLI layer
 }
 
 // Execute runs the full fetch→compile→memory pipeline for a connector resource.
@@ -54,6 +56,11 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 				obj, err := store.Get(entry.ID)
 				if err == nil {
 					resp := responseFromMemory(obj)
+					// Inject related recalls from same connector (store.Query re-locks independently — safe)
+					resp.Meta.Recalls = buildRecalls(store, connectorName, obj.ID)
+					if len(resp.Meta.Recalls) > 0 {
+						resp.Meta.MemoryHint = "Use harbor_remember to store analysis conclusions for next time."
+					}
 					return &Result{
 						Response: resp,
 						MemoryID: obj.ID,
@@ -118,11 +125,19 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 	if !opts.NoMemory {
 		store, err := memory.NewStore()
 		if err == nil {
+			if opts.CloudPush != nil {
+				store.CloudPush = opts.CloudPush
+			}
 			memObj := BuildMemoryObject(connectorName, resource, params, resp, compiled, schema)
 			if id, err := store.Save(memObj); err == nil {
 				memID = id
 				compiled.Meta.MemoryID = id
 				compiled.Meta.FromMemory = false
+				// Inject related recalls (excluding entry just saved)
+				compiled.Meta.Recalls = buildRecalls(store, connectorName, id)
+				if len(compiled.Meta.Recalls) > 0 {
+					compiled.Meta.MemoryHint = "Use harbor_remember to store analysis conclusions for next time."
+				}
 			}
 		}
 	}
@@ -193,4 +208,60 @@ func ParseConnectorResource(arg string) (connectorName, resource string, err err
 		return "", "", err
 	}
 	return parts[0], parts[1], nil
+}
+
+// buildRecalls queries the store for recent entries from the same connector,
+// excluding excludeID (the entry just saved or currently being served), and
+// returns up to 3 MemoryRef values. Cloud notes (cross-device) fill remaining slots.
+func buildRecalls(store *memory.Store, connectorName, excludeID string) []protocol.MemoryRef {
+	related := store.Query(memory.QueryOptions{Connector: connectorName, Limit: 5})
+	var refs []protocol.MemoryRef
+	for _, e := range related {
+		if e.ID == excludeID {
+			continue
+		}
+		refs = append(refs, protocol.MemoryRef{
+			ID:       e.ID,
+			Resource: e.Resource,
+			Age:      formatMemoryAge(e.CreatedAt),
+			Summary:  e.Summary,
+			Fresh:    store.IsFresh(&e),
+		})
+		if len(refs) == 3 {
+			break
+		}
+	}
+
+	// Fill remaining slots with cloud notes (cross-device memories pulled on login).
+	if len(refs) < 3 {
+		noteStore := memory.NewNoteStore()
+		for _, n := range noteStore.ForConnector(connectorName) {
+			if len(refs) >= 3 {
+				break
+			}
+			resource := strings.TrimPrefix(n.Key, connectorName+".")
+			refs = append(refs, protocol.MemoryRef{
+				ID:       n.Key,
+				Resource: resource,
+				Age:      formatMemoryAge(n.UpdatedAt),
+				Summary:  n.Content,
+				Fresh:    false,
+			})
+		}
+	}
+
+	return refs
+}
+
+// formatMemoryAge returns a human-friendly relative age string.
+func formatMemoryAge(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d hours ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
+	}
 }

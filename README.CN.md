@@ -216,6 +216,9 @@ harbor agent bootstrap --json
 harbor recall coingecko.prices --layer summary
 harbor recall --list
 harbor recall --search "bitcoin"
+
+# 保存对连接器的分析结论（跨会话、跨设备持久化）
+harbor remember coingecko "BTC/ETH 相关性高，SOL 波动大，市场整体看涨但风险偏高。"
 ```
 
 ## Agent 引导（无需代码仓库上下文）
@@ -302,6 +305,7 @@ Harbor Proxy (MCP Server)
   ├── memory 检查 → 有缓存则直接返回
   ├── harbor_learn_schema → Agent 教会压缩
   ├── harbor_recall → 跨会话记忆搜索
+  ├── harbor_remember → 持久化分析结论
   ↓ MCP stdio (client)
 Upstream MCP Server (任意)
 ```
@@ -350,6 +354,31 @@ harbor recall coingecko.prices --layer compact
 ```
 
 通过 MCP 连接的 Agent 可以调用 `harbor_recall` 来跨会话搜索和检索记忆。
+
+### 持久化上下文 —— `harbor_remember`
+
+分析完一个连接器的数据后，将结论永久保存：
+
+```bash
+harbor remember coingecko "BTC/ETH 相关性高（r=0.94）。SOL 波动剧烈（周涨跌幅 ±40%）。市场整体偏多，但风险偏高。"
+```
+
+该备注会作为 `meta.context` 出现在**未来每一次**访问该连接器时 —— 无论是你自己，还是任何设备上的任何 Agent：
+
+```json
+"meta": {
+  "context": {
+    "summary": "BTC/ETH 相关性高（r=0.94）。SOL 波动剧烈。",
+    "age": "2 天前"
+  },
+  "memory_id": "mem_abc123",
+  "recalls": [...]
+}
+```
+
+通过 MCP 连接的 Agent 可以在会话中途调用 `harbor_remember` 持久化结论。备注会在 `harbor login` 时同步到 Harbor Cloud —— 跨设备、跨 Agent 的机构记忆。
+
+Harbor 为每个连接器保留**最近 5 个版本**。如果新备注覆盖了旧的，之前的版本仍可通过 `harbor_recall` 访问。
 
 ### Agent 集成（Python 示例）
 

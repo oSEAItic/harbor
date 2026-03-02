@@ -216,6 +216,9 @@ harbor agent bootstrap --json
 harbor recall coingecko.prices --layer summary
 harbor recall --list
 harbor recall --search "bitcoin"
+
+# Save analysis conclusions about a connector (persists across sessions and devices)
+harbor remember coingecko "BTC/ETH correlation high. SOL volatile. Market bullish overall."
 ```
 
 ## Agent Bootstrap (No Repo Context Required)
@@ -302,6 +305,7 @@ Harbor Proxy (MCP Server)
   ├── memory check → return cached if fresh
   ├── harbor_learn_schema → agent teaches compression
   ├── harbor_recall → cross-session memory search
+  ├── harbor_remember → persist analysis conclusions
   ↓ MCP stdio (client)
 Upstream MCP Server (any)
 ```
@@ -350,6 +354,31 @@ harbor recall coingecko.prices --layer compact
 ```
 
 Agents connected via MCP can call `harbor_recall` to search and retrieve memories across sessions.
+
+### Persistent Context — `harbor_remember`
+
+After analyzing a connector's data, save your conclusions permanently:
+
+```bash
+harbor remember coingecko "BTC/ETH correlation high (r=0.94). SOL volatile (+40% weekly swings). Market trending bullish but elevated risk."
+```
+
+The note appears as `meta.context` at the start of **every future session** with that connector — for you, or any agent on any device:
+
+```json
+"meta": {
+  "context": {
+    "summary": "BTC/ETH correlation high (r=0.94). SOL volatile.",
+    "age": "2 days ago"
+  },
+  "memory_id": "mem_abc123",
+  "recalls": [...]
+}
+```
+
+Agents connected via MCP can call `harbor_remember` to persist conclusions mid-session. Notes sync to Harbor Cloud on login — cross-device, cross-agent institutional memory.
+
+Harbor keeps the **5 most recent versions** per connector. If a note is overwritten, previous versions remain accessible via `harbor_recall`.
 
 ### Agent integration (Python example)
 

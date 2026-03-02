@@ -3,6 +3,32 @@ import { execFile } from "child_process";
 
 // ── Protocol types ──────────────────────────────────────────────
 
+export interface HarborPageInfo {
+  cursor?: string;
+  has_more: boolean;
+  total?: number;
+}
+
+/** Lightweight reference to a related memory entry injected in meta.recalls. */
+export interface HarborMemoryRef {
+  id: string;
+  resource: string;
+  /** Human-friendly age string, e.g. "2 days ago", "5 hours ago". */
+  age: string;
+  summary: string;
+  /** True if the memory was created within the freshness window. */
+  fresh: boolean;
+}
+
+/**
+ * Pinned connector-level note written by an agent via harbor_remember.
+ * Appears as meta.context on every future access to the connector.
+ */
+export interface HarborContextRef {
+  summary: string;
+  age: string;
+}
+
 export interface HarborMeta {
   source: string;
   connector_version: string;
@@ -10,11 +36,31 @@ export interface HarborMeta {
   tool_schema_version?: string;
   fetched_at: string;
   request_id: string;
-  pagination?: {
-    cursor?: string;
-    has_more: boolean;
-    total?: number;
-  };
+  pagination?: HarborPageInfo;
+  /** ID of the memory entry that backed this response (if any). */
+  memory_id?: string;
+  /** True when the response was served from the local memory cache. */
+  from_memory?: boolean;
+  /**
+   * Pinned connector-level note from harbor_remember.
+   * Present on every access once the agent has saved a conclusion.
+   */
+  context?: HarborContextRef;
+  /**
+   * Related memory entries for the same connector, injected automatically
+   * by the pipeline to give the agent cross-session context.
+   */
+  recalls?: HarborMemoryRef[];
+  /**
+   * Hint shown when no context exists yet, prompting the agent to call
+   * harbor_remember after analysis.
+   */
+  memory_hint?: string;
+}
+
+export interface HarborContextOverview {
+  total_items: number;
+  fields: string[];
 }
 
 export interface HarborError {
@@ -28,6 +74,8 @@ export interface HarborResponse<T = unknown> {
   meta: HarborMeta;
   raw: unknown | null;
   errors: HarborError[];
+  overview?: HarborContextOverview;
+  summary?: string;
 }
 
 /** Visibility levels for field-level access control (Govern). */

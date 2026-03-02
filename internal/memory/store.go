@@ -18,9 +18,10 @@ import (
 const (
 	maxIndexEntries = 500
 	pruneMaxAge     = 7 * 24 * time.Hour // 7 days
+	maxNoteVersions = 5                  // soft versioning: keep last N notes per connector
 
 	// SchemaNote identifies connector-level notes written by harbor_remember.
-	// Notes skip deduplication so each session's conclusions accumulate.
+	// Notes accumulate up to maxNoteVersions; oldest are pruned on each write.
 	SchemaNote = "harbor.note.v1"
 )
 
@@ -131,6 +132,33 @@ func (s *Store) Save(obj *Object) (string, error) {
 		BytesCompact: obj.Meta.BytesCompact,
 		Summary:      obj.Layers.Summary,
 	})
+
+	// Note soft versioning: keep only the most recent maxNoteVersions per connector.
+	if obj.Schema == SchemaNote {
+		var noteEntries []IndexEntry
+		for _, e := range idx.Entries {
+			if e.Connector == obj.Connector && e.Resource == obj.Resource && e.Schema == SchemaNote {
+				noteEntries = append(noteEntries, e)
+			}
+		}
+		if len(noteEntries) > maxNoteVersions {
+			sort.Slice(noteEntries, func(i, j int) bool {
+				return noteEntries[i].CreatedAt.Before(noteEntries[j].CreatedAt)
+			})
+			pruneSet := make(map[string]bool)
+			for _, e := range noteEntries[:len(noteEntries)-maxNoteVersions] {
+				pruneSet[e.ID] = true
+				os.Remove(filepath.Join(s.objDir, e.ID+".json"))
+			}
+			fresh := idx.Entries[:0]
+			for _, e := range idx.Entries {
+				if !pruneSet[e.ID] {
+					fresh = append(fresh, e)
+				}
+			}
+			idx.Entries = fresh
+		}
+	}
 
 	// Lazy pruning: if index exceeds max size, prune old entries
 	if len(idx.Entries) > maxIndexEntries {

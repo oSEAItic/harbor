@@ -223,3 +223,70 @@ func TestHistoryFallsBackToCurrentFile(t *testing.T) {
 		t.Fatalf("history version = %d, want 3", h[0].Version)
 	}
 }
+
+func TestStore_CloudPush_CalledOnSave(t *testing.T) {
+	store, err := NewStoreAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	called := make(chan *LearnedSchema, 1)
+	store.CloudPush = func(toolName string, ls *LearnedSchema) {
+		called <- ls
+	}
+
+	ls := &LearnedSchema{
+		ToolName:        "github__list_issues",
+		SummaryFields:   []string{"number", "title", "state"},
+		SummaryTemplate: "#{number} {title} [{state}]",
+		LearnedAt:       time.Now(),
+	}
+	if err := store.Save(ls); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	select {
+	case pushed := <-called:
+		if pushed.ToolName != ls.ToolName {
+			t.Errorf("CloudPush got ToolName=%q, want %q", pushed.ToolName, ls.ToolName)
+		}
+		if len(pushed.SummaryFields) != 3 {
+			t.Errorf("CloudPush got %d fields, want 3", len(pushed.SummaryFields))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("CloudPush was not called within 1s")
+	}
+}
+
+func TestStore_CloudPush_NilSafe(t *testing.T) {
+	store, err := NewStoreAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// CloudPush is nil by default — Save must not panic.
+	ls := &LearnedSchema{
+		ToolName:        "fs__list_directory",
+		SummaryFields:   []string{"name"},
+		SummaryTemplate: "{name}",
+		LearnedAt:       time.Now(),
+	}
+	if err := store.Save(ls); err != nil {
+		t.Fatalf("Save with nil CloudPush: %v", err)
+	}
+}
+
+func TestStore_CloudPush_NotCalledOnReadOnly(t *testing.T) {
+	store, err := NewStoreAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var pushCount int
+	store.CloudPush = func(_ string, _ *LearnedSchema) { pushCount++ }
+
+	// Get on missing key — must not trigger CloudPush.
+	_ = store.Get("nonexistent")
+	if pushCount != 0 {
+		t.Errorf("CloudPush called %d times on Get, want 0", pushCount)
+	}
+}

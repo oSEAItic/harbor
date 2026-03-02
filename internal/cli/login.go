@@ -11,6 +11,7 @@ import (
 	"github.com/oseaitic/harbor/internal/auth"
 	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/oseaitic/harbor/internal/memory"
+	"github.com/oseaitic/harbor/internal/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -117,6 +118,32 @@ Examples:
 				}
 				if saveErr := noteStore.Save(local); saveErr == nil {
 					fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %d memory note(s) synced from cloud\n", len(notes))
+				}
+			}
+
+			// Pull cloud learned schemas to local schema store.
+			// Only writes schemas that don't exist locally — local always wins.
+			if cloudSchemas, err := cloudauth.PullSchemas(&cfg); err == nil && len(cloudSchemas) > 0 {
+				if schemaStore, err := schema.NewStore(); err == nil {
+					synced := 0
+					for _, s := range cloudSchemas {
+						if schemaStore.Has(s.ToolName) {
+							continue // local schema takes precedence
+						}
+						ls := &schema.LearnedSchema{
+							ToolName:        s.ToolName,
+							SummaryFields:   s.SummaryFields,
+							SummaryTemplate: s.SummaryTemplate,
+							LearnedAt:       s.LearnedAt,
+							LLMModel:        "cloud-sync",
+						}
+						if schemaStore.Save(ls) == nil {
+							synced++
+						}
+					}
+					if synced > 0 {
+						fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %d schema(s) synced from cloud\n", synced)
+					}
 				}
 			}
 

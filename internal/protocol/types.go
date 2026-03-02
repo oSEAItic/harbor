@@ -30,17 +30,28 @@ type ContextOverview struct {
 	Fields     []string `json:"fields"`
 }
 
+// MemoryRef is a lightweight reference to a related memory entry.
+type MemoryRef struct {
+	ID       string `json:"id"`
+	Resource string `json:"resource"`
+	Age      string `json:"age"`     // e.g. "2 days ago", "5 hours ago"
+	Summary  string `json:"summary"`
+	Fresh    bool   `json:"fresh"`
+}
+
 // Meta contains provenance and versioning information.
 type Meta struct {
-	Source           string     `json:"source"`
-	ConnectorVersion string    `json:"connector_version"`
-	Schema           string    `json:"schema"`
-	ToolSchemaVersion string   `json:"tool_schema_version,omitempty"`
-	FetchedAt        time.Time `json:"fetched_at"`
-	RequestID        string    `json:"request_id"`
-	Pagination       *PageInfo `json:"pagination,omitempty"`
-	MemoryID         string    `json:"memory_id,omitempty"`
-	FromMemory       bool      `json:"from_memory,omitempty"`
+	Source            string      `json:"source"`
+	ConnectorVersion  string      `json:"connector_version"`
+	Schema            string      `json:"schema"`
+	ToolSchemaVersion string      `json:"tool_schema_version,omitempty"`
+	FetchedAt         time.Time   `json:"fetched_at"`
+	RequestID         string      `json:"request_id"`
+	Pagination        *PageInfo   `json:"pagination,omitempty"`
+	MemoryID          string      `json:"memory_id,omitempty"`
+	FromMemory        bool        `json:"from_memory,omitempty"`
+	Recalls           []MemoryRef `json:"recalls,omitempty"`
+	MemoryHint        string      `json:"memory_hint,omitempty"`
 }
 
 // PageInfo enables cursor-based pagination for large result sets.

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/oseaitic/harbor/internal/proxy"
 	"github.com/oseaitic/harbor/internal/schema"
 )
@@ -65,6 +66,13 @@ Examples:
 			schemaStore, err := schema.NewStore()
 			if err != nil {
 				return fmt.Errorf("schema store: %w", err)
+			}
+
+			// Inject cloud push if logged in — schemas sync automatically after harbor_learn_schema.
+			if cfg, err := cloudauth.Load(); err == nil {
+				schemaStore.CloudPush = func(toolName string, ls *schema.LearnedSchema) {
+					_ = cloudauth.PushSchema(toolName, ls.SummaryFields, ls.SummaryTemplate, ls.LearnedAt, cfg)
+				}
 			}
 
 			return proxy.Run(proxy.Config{

@@ -20,8 +20,9 @@ var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9_\-]`)
 // Store manages learned schemas on the local filesystem.
 // Each tool gets one JSON file at HARBOR_HOME/schemas/<sanitized_name>.json.
 type Store struct {
-	dir string
-	mu  sync.RWMutex
+	dir       string
+	mu        sync.RWMutex
+	CloudPush func(toolName string, ls *LearnedSchema) // nil = no-op; set by CLI layer
 }
 
 // NewStore creates a schema store at HARBOR_HOME/schemas (or ~/.harbor/schemas).
@@ -50,8 +51,15 @@ func (s *Store) Save(ls *LearnedSchema) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.saveNoLock(ls)
-	return err
+	saved, err := s.saveNoLock(ls)
+	if err != nil {
+		return err
+	}
+	if s.CloudPush != nil {
+		cp := *saved
+		go s.CloudPush(cp.ToolName, &cp) // non-blocking, best-effort
+	}
+	return nil
 }
 
 // History returns all known versions for a tool, sorted by version ascending.

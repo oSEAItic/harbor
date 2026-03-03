@@ -18,7 +18,18 @@ import (
 type Config struct {
 	Endpoint  string    `json:"endpoint"`
 	APIKey    string    `json:"api_key"`
+	EncKey    string    `json:"enc_key,omitempty"` // stable per-user encryption key (independent of API key rotation)
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// EncryptionKey returns the stable per-user key used for credential encryption.
+// Falls back to APIKey for existing installs that predate enc_key support
+// (those installs will get enc_key on next 'harbor login').
+func (c *Config) EncryptionKey() string {
+	if c.EncKey != "" {
+		return c.EncKey
+	}
+	return c.APIKey
 }
 
 func configPath() string {

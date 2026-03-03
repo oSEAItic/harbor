@@ -77,6 +77,34 @@ func LoginWithPassword(endpoint, email, password string) (sessionToken, apiKey s
 	return out.SessionToken, out.APIKey, nil
 }
 
+// FetchEncKey calls GET /api/me and returns the stable per-user encryption key.
+// Called during 'harbor login' to populate Config.EncKey.
+func FetchEncKey(cfg *Config) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, cfg.Endpoint+"/api/me", nil)
+	if err != nil {
+		return "", fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("X-API-Key", cfg.APIKey)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetching enc_key: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+	var out struct {
+		EncKey string `json:"enc_key"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil || out.EncKey == "" {
+		return "", fmt.Errorf("invalid enc_key response")
+	}
+	return out.EncKey, nil
+}
+
 // CreateAPIKey creates a new named API key using a session token.
 func CreateAPIKey(endpoint, sessionToken, name string) (apiKey string, err error) {
 	body, _ := json.Marshal(map[string]string{"name": name})

@@ -85,14 +85,15 @@ func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
 	}
 
 	if useCloud {
-		// Encrypt client-side with the API key — no separate password needed.
-		// The server stores only ciphertext and cannot decrypt it.
+		// Encrypt client-side with the stable per-user enc_key.
+		// Using enc_key (not api_key) means rotating the API key never
+		// invalidates stored credential blobs.
 		fmt.Fprintf(cmd.OutOrStdout(), "\nEncrypting and uploading...\n")
-		if err := cloudauth.StoreCloudCredential(connector, credential, cfg.APIKey, cfg); err != nil {
+		if err := cloudauth.StoreCloudCredential(connector, credential, cfg.EncryptionKey(), cfg); err != nil {
 			return fmt.Errorf("storing cloud credential: %w", err)
 		}
 		// Also write to Harbor Keychain so this machine can use it immediately.
-		if err := auth.SaveToKeychain(connector, credential, cfg.APIKey); err != nil {
+		if err := auth.SaveToKeychain(connector, credential, cfg.EncryptionKey()); err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not write to Harbor Keychain: %v\n", err)
 		}
 		// Best-effort: also update OS keychain to keep it in sync.
@@ -172,11 +173,11 @@ func syncOne(cmd *cobra.Command, cfg *cloudauth.Config, connector string) error 
 	if err != nil {
 		return err
 	}
-	plaintext, err := cloudauth.DecryptCredential(blob, cfg.APIKey)
+	plaintext, err := cloudauth.DecryptCredential(blob, cfg.EncryptionKey())
 	if err != nil {
 		return err
 	}
-	if err := auth.SaveToKeychain(connector, plaintext, cfg.APIKey); err != nil {
+	if err := auth.SaveToKeychain(connector, plaintext, cfg.EncryptionKey()); err != nil {
 		return fmt.Errorf("writing Harbor Keychain: %w", err)
 	}
 	// Best-effort: also write to OS keychain (may fail in sandboxes — that's OK).

@@ -78,6 +78,14 @@ Examples:
 				Endpoint: endpoint,
 				APIKey:   key,
 			}
+
+			// Fetch the stable per-user encryption key.  This key never changes
+			// even when the API key is rotated, so credential blobs remain
+			// decryptable across logins.
+			if encKey, err := cloudauth.FetchEncKey(&cfg); err == nil {
+				cfg.EncKey = encKey
+			}
+
 			if err := cloudauth.Save(cfg); err != nil {
 				return fmt.Errorf("saving credentials: %w", err)
 			}
@@ -94,11 +102,11 @@ Examples:
 					if err != nil {
 						continue
 					}
-					plaintext, err := cloudauth.DecryptCredential(blob, cfg.APIKey)
+					plaintext, err := cloudauth.DecryptCredential(blob, cfg.EncryptionKey())
 					if err != nil {
 						continue
 					}
-					if auth.SaveToKeychain(e.Connector, plaintext, cfg.APIKey) == nil {
+					if auth.SaveToKeychain(e.Connector, plaintext, cfg.EncryptionKey()) == nil {
 						_ = auth.Store(e.Connector, plaintext) // best-effort OS keychain
 						synced++
 					}

@@ -19,6 +19,11 @@ type Policy struct {
 	// Fields declared with a higher visibility level will be filtered out.
 	// Empty string means no visibility restrictions.
 	MaxVisibility string `json:"max_visibility,omitempty"`
+
+	// FieldOverrides provides per-field visibility overrides from a govern profile.
+	// These override the connector's default field_visibility annotations.
+	// Keys are field names (scoped to the current connector.resource request).
+	FieldOverrides map[string]string `json:"field_overrides,omitempty"`
 }
 
 // CanAccess reports whether the policy allows accessing the given connector and resource.

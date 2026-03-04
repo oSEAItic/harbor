@@ -336,16 +336,19 @@ func main() {
 			return
 		}
 
-		// Govern Layer 3: pass max_visibility to pipeline.
+		// Govern Layer 3: pass max_visibility + field overrides to pipeline.
 		var maxVis string
+		var fieldOverrides map[string]string
 		if policy != nil {
 			maxVis = policy.MaxVisibility
+			fieldOverrides = policy.FieldOverrides
 		}
 
 		exec := executor.NewLocalExecutor()
 		result, err := pipeline.Execute(exec, req.Connector, req.Resource, req.Params, nil, pipeline.Options{
-			Compile:       harborctx.DefaultOptions(),
-			MaxVisibility: maxVis,
+			Compile:        harborctx.DefaultOptions(),
+			MaxVisibility:  maxVis,
+			FieldOverrides: fieldOverrides,
 		})
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -374,6 +377,9 @@ func main() {
 			w.Header().Set("X-Harbor-Cache", "hit")
 		} else {
 			w.Header().Set("X-Harbor-Cache", "miss")
+		}
+		if result.GovernFieldsRemoved > 0 {
+			w.Header().Set("X-Harbor-Govern-Removed", strconv.Itoa(result.GovernFieldsRemoved))
 		}
 		w.Write(respBytes)
 

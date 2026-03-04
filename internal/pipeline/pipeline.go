@@ -39,8 +39,9 @@ type Options struct {
 	Refresh       bool
 	Compile       harborctx.CompileOptions
 	Errors        ErrorMode
-	MaxVisibility string                 // govern Layer 3: field visibility ceiling (empty = no filtering)
-	CloudPush     func(key, content string) // nil = no cloud sync; set by CLI layer
+	MaxVisibility  string                 // govern Layer 3: field visibility ceiling (empty = no filtering)
+	FieldOverrides map[string]string     // govern profile: per-field visibility overrides (override > connector default)
+	CloudPush      func(key, content string) // nil = no cloud sync; set by CLI layer
 }
 
 // Execute runs the full fetch→compile→memory pipeline for a connector resource.
@@ -90,6 +91,16 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 		if tf, err := connector.GetResourceSchema(connectorName, resource); err == nil {
 			summaryFields = tf.SummaryFields
 			fieldVisibility = tf.FieldVisibility
+		}
+	}
+
+	// Merge govern profile overrides into field visibility (override > connector default)
+	if len(opts.FieldOverrides) > 0 {
+		if fieldVisibility == nil {
+			fieldVisibility = make(map[string]string)
+		}
+		for field, vis := range opts.FieldOverrides {
+			fieldVisibility[field] = vis
 		}
 	}
 

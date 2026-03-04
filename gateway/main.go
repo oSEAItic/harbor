@@ -198,6 +198,51 @@ func main() {
 		json.NewEncoder(w).Encode(results)
 	})
 
+	// Memory remember — save an agent's analysis note for a connector.
+	// Used by harbor-cloud MCP server for the harbor_remember tool.
+	mux.HandleFunc("POST /remember", func(w http.ResponseWriter, r *http.Request) {
+		auth, authErr := authorize(r, cfg)
+		if authErr != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		_ = auth
+
+		var req struct {
+			Connector string `json:"connector"`
+			Note      string `json:"note"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Connector == "" || req.Note == "" {
+			http.Error(w, `{"error":"connector and note are required"}`, http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if memStore == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "memory store not available"})
+			return
+		}
+
+		id, err := memStore.SaveNote(req.Connector, req.Note)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("save failed: %v", err)})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "saved",
+			"connector": req.Connector,
+			"memory_id": id,
+		})
+	})
+
 	mux.HandleFunc("POST /run", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		auth, authErr := authorize(r, cfg)

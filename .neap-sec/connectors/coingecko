@@ -1,0 +1,214 @@
+#!/usr/bin/env node
+"use strict";
+
+// sdk/typescript/src/index.ts
+var import_crypto = require("crypto");
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let resource = "";
+  let params = {};
+  let raw = false;
+  const auth = process.env.HARBOR_AUTH || "";
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case "--resource":
+        resource = args[++i] || "";
+        break;
+      case "--params":
+        try {
+          params = JSON.parse(args[++i] || "{}");
+        } catch {
+          params = {};
+        }
+        break;
+      case "--raw":
+        raw = true;
+        break;
+    }
+  }
+  return { resource, params, auth, raw };
+}
+function output(response) {
+  process.stdout.write(JSON.stringify(response) + "\n");
+}
+function buildMeta(opts) {
+  return {
+    source: opts.source,
+    connector_version: opts.connector_version,
+    schema: opts.schema,
+    tool_schema_version: "harbor.tools.v1",
+    fetched_at: (/* @__PURE__ */ new Date()).toISOString(),
+    request_id: (0, import_crypto.randomUUID)()
+  };
+}
+function errorResponse(source, code, message) {
+  return {
+    data: [],
+    meta: {
+      source,
+      connector_version: "0.0.0",
+      schema: "",
+      fetched_at: (/* @__PURE__ */ new Date()).toISOString(),
+      request_id: (0, import_crypto.randomUUID)()
+    },
+    raw: null,
+    errors: [{ code, message }]
+  };
+}
+function handleDescribe(schemas) {
+  if (process.argv.includes("--describe")) {
+    process.stdout.write(JSON.stringify(schemas) + "\n");
+    return true;
+  }
+  return false;
+}
+
+// connectors/coingecko/src/index.ts
+var CONNECTOR_VERSION = "0.1.0";
+var SOURCE = "coingecko";
+var BASE_URL = "https://api.coingecko.com/api/v3";
+var toolSchemas = [
+  {
+    type: "function",
+    function: {
+      name: "coingecko.prices",
+      description: "Get current prices for one or more cryptocurrencies in a target currency",
+      parameters: {
+        type: "object",
+        properties: {
+          ids: {
+            type: "string",
+            description: "Comma-separated CoinGecko coin IDs (e.g. bitcoin,ethereum)"
+          },
+          vs_currencies: {
+            type: "string",
+            description: "Target currency (e.g. usd, eur)"
+          }
+        },
+        required: ["ids", "vs_currencies"]
+      },
+      summary_fields: ["id", "usd", "usd_24h_change", "usd_market_cap"],
+      summary_template: "{id}: ${usd} ({usd_24h_change}%)"
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "coingecko.coin",
+      description: "Get detailed information about a specific cryptocurrency",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "CoinGecko coin ID (e.g. bitcoin)"
+          }
+        },
+        required: ["id"]
+      },
+      summary_fields: ["id", "name", "symbol", "market_cap_rank"],
+      summary_template: "{name} ({symbol}) \u2014 rank #{market_cap_rank}"
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "coingecko.trending",
+      description: "Get trending cryptocurrencies on CoinGecko",
+      parameters: {
+        type: "object",
+        properties: {}
+      },
+      summary_fields: ["id", "name", "symbol", "market_cap_rank", "score"],
+      summary_template: "{name} ({symbol}, #{market_cap_rank})"
+    }
+  }
+];
+async function fetchPrices(params) {
+  const ids = params.ids || "bitcoin";
+  const vs = params.vs_currencies || "usd";
+  const url = `${BASE_URL}/simple/price?ids=${ids}&vs_currencies=${vs}&include_24hr_change=true&include_market_cap=true`;
+  const resp = await fetch(url);
+  if (!resp.ok)
+    throw new Error(`CoinGecko API error: ${resp.status}`);
+  const raw = await resp.json();
+  const data = Object.entries(raw).map(
+    ([coinId, prices]) => ({
+      id: coinId,
+      ...prices
+    })
+  );
+  return { data, raw };
+}
+async function fetchCoin(params) {
+  const id = params.id || "bitcoin";
+  const url = `${BASE_URL}/coins/${encodeURIComponent(id)}?localization=false&tickers=false&community_data=false&developer_data=false`;
+  const resp = await fetch(url);
+  if (!resp.ok)
+    throw new Error(`CoinGecko API error: ${resp.status}`);
+  const raw = await resp.json();
+  const data = [
+    {
+      id: raw.id,
+      symbol: raw.symbol,
+      name: raw.name,
+      market_cap_rank: raw.market_cap_rank,
+      market_data: raw.market_data,
+      description: raw.description?.en?.slice(0, 500)
+    }
+  ];
+  return { data, raw };
+}
+async function fetchTrending() {
+  const url = `${BASE_URL}/search/trending`;
+  const resp = await fetch(url);
+  if (!resp.ok)
+    throw new Error(`CoinGecko API error: ${resp.status}`);
+  const raw = await resp.json();
+  const data = raw.coins.map((c) => c.item);
+  return { data, raw };
+}
+async function main() {
+  if (handleDescribe(toolSchemas))
+    return;
+  const { resource, params } = parseArgs();
+  const handlers = {
+    prices: fetchPrices,
+    coin: fetchCoin,
+    trending: fetchTrending
+  };
+  const handler = handlers[resource];
+  if (!handler) {
+    output(
+      errorResponse(
+        SOURCE,
+        "resource_not_found",
+        `Unknown resource: ${resource}. Available: ${Object.keys(handlers).join(", ")}`
+      )
+    );
+    process.exit(1);
+  }
+  try {
+    const { data, raw } = await handler(params);
+    output({
+      data,
+      meta: buildMeta({
+        source: SOURCE,
+        connector_version: CONNECTOR_VERSION,
+        schema: `crypto.${resource}.v1`
+      }),
+      raw,
+      errors: []
+    });
+  } catch (err) {
+    output(
+      errorResponse(
+        SOURCE,
+        "execution_error",
+        err instanceof Error ? err.message : String(err)
+      )
+    );
+    process.exit(1);
+  }
+}
+main();

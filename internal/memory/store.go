@@ -211,17 +211,29 @@ func (s *Store) Get(id string) (*Object, error) {
 }
 
 // Latest finds the most recent index entry matching connector, resource, and params.
+// When params is empty, it falls back to matching any entry with the same connector+resource.
 func (s *Store) Latest(connector, resource string, params map[string]string) *IndexEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	idx := loadIndex(s.dir)
-	key := canonicalKey(connector, resource, params)
 
+	// Exact match first (includes params).
+	key := canonicalKey(connector, resource, params)
 	for i := len(idx.Entries) - 1; i >= 0; i-- {
 		e := &idx.Entries[i]
 		if canonicalKey(e.Connector, e.Resource, e.Params) == key {
 			return e
+		}
+	}
+
+	// Fallback: if caller provided no params, match any entry with the same connector+resource.
+	if len(params) == 0 {
+		for i := len(idx.Entries) - 1; i >= 0; i-- {
+			e := &idx.Entries[i]
+			if e.Connector == connector && e.Resource == resource {
+				return e
+			}
 		}
 	}
 

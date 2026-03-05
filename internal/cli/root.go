@@ -14,8 +14,8 @@ func NewRootCmd(version string, sourceDir ...string) *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "harbor",
-		Short: "Fetch, normalize, and compress external data for LLMs",
-		Long: `Harbor — Fetch, normalize, and compress external data for LLMs.
+		Short: "Context infrastructure for AI agents",
+		Long: `Harbor — Context infrastructure for AI agents.
 
 Quick start:
   harbor list                          See available connectors

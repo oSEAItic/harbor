@@ -39,18 +39,17 @@ Example:
 				return fmt.Errorf("opening memory store: %w", err)
 			}
 
-			// Inject cloud push if logged in.
-			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
-				store.CloudPush = func(key, content string) {
-					if pushErr := cloudauth.PushMemory(key, content, cfg); pushErr != nil {
-						fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] cloud sync failed for %s: %v\n", key, pushErr)
-					}
-				}
-			}
-
 			id, err := store.SaveNote(connector, note, author)
 			if err != nil {
 				return fmt.Errorf("saving note: %w", err)
+			}
+
+			// Best-effort cloud push with author.
+			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
+				key := connector + "._context"
+				if pushErr := cloudauth.PushMemory(key, note, author, cfg); pushErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] cloud sync failed for %s: %v\n", key, pushErr)
+				}
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Saved note for %q (%s)\n", connector, id)

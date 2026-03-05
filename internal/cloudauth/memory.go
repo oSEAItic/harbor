@@ -13,14 +13,19 @@ import (
 type CloudNote struct {
 	Key       string    `json:"key"`
 	Content   string    `json:"content"`
+	Author    string    `json:"author,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // PushMemory upserts a memory summary to Harbor Cloud.
 // key is "connector.resource" (e.g. "kuse-hive.traces").
 // Called asynchronously from Store.Save; errors are silently dropped.
-func PushMemory(key, content string, cfg *Config) error {
-	body, err := json.Marshal(map[string]string{"content": content})
+func PushMemory(key, content, author string, cfg *Config) error {
+	payload := map[string]string{"content": content}
+	if author != "" {
+		payload["author"] = author
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}

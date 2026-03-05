@@ -45,7 +45,7 @@ func saveIndex(dir string, idx *Index) error {
 	path := filepath.Join(dir, "index.json")
 	tmp := path + ".tmp"
 
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
 

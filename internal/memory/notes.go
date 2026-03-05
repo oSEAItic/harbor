@@ -50,7 +50,7 @@ func (n *NoteStore) Save(notes []Note) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(n.path, data, 0o644)
+	return os.WriteFile(n.path, data, 0o600)
 }
 
 // ForConnector returns all notes whose key starts with "<connector>.".

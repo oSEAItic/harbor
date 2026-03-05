@@ -97,7 +97,7 @@ func (s *Store) Save(obj *Object) (string, error) {
 	}
 
 	objPath := filepath.Join(s.objDir, obj.ID+".json")
-	if err := os.WriteFile(objPath, data, 0o644); err != nil {
+	if err := os.WriteFile(objPath, data, 0o600); err != nil {
 		return "", fmt.Errorf("writing memory object: %w", err)
 	}
 

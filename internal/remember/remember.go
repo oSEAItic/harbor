@@ -80,7 +80,7 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 		go func() {
 			if cfg, err := cloudauth.Load(); err == nil {
 				key := connector + "._context"
-				_ = cloudauth.PushMemory(key, note, cfg)
+				_ = cloudauth.PushMemory(key, note, author, cfg)
 			}
 		}()
 

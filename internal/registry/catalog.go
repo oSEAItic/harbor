@@ -17,19 +17,19 @@ var catalog = []CatalogEntry{
 	{
 		ID:          "coingecko",
 		Name:        "CoinGecko",
-		Version:     "0.1.0",
+		Version:     "0.2.0",
 		Description: "Cryptocurrency prices, trending coins, and coin details from CoinGecko",
 		Runtime:     "node",
-		DownloadURL: "https://github.com/oseaitic/harbor/releases/download/v0.1.0/coingecko.js",
+		DownloadURL: "https://github.com/oSEAItic/harbor/releases/download/v0.2.0/coingecko.js",
 		Schemas:     []string{"crypto.prices.v1", "crypto.coin.v1", "crypto.trending.v1"},
 	},
 	{
 		ID:          "yahoo",
 		Name:        "Yahoo Finance",
-		Version:     "0.1.0",
+		Version:     "0.2.0",
 		Description: "Stock quotes, company summaries, search, and trending symbols from Yahoo Finance",
 		Runtime:     "node",
-		DownloadURL: "https://github.com/oseaitic/harbor/releases/download/v0.1.0/yahoo.js",
+		DownloadURL: "https://github.com/oSEAItic/harbor/releases/download/v0.2.0/yahoo.js",
 		Schemas:     []string{"finance.quote.v1", "finance.summary.v1", "finance.search.v1", "finance.trending.v1"},
 	},
 }

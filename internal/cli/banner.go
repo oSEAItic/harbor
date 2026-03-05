@@ -55,9 +55,8 @@ func printBanner(version string) {
 		"                              " + cDim + cwd + cReset,
 		cBlue + "   ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~" + cReset,
 		"",
-		"   " + cBold + "Connectors:" + cReset + " " + names,
-		"   " + cDim + "Run" + cReset + " " + cBold + "harbor get <connector.resource>" + cReset + " " + cDim + "to fetch live data" + cReset,
-		"   " + cDim + "Run" + cReset + " " + cBold + "harbor tools export" + cReset + " " + cDim + "for LLM/agent integration" + cReset,
+		"   " + cDim + "Welcome home, agent." + cReset + " " + cBold + "Connectors:" + cReset + " " + names,
+		"   " + cDim + "Your data, normalized, curated, and governed." + cReset,
 		"",
 	}
 

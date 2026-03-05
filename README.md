@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  Works with <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>any MCP client</strong>
+  Works with <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Codex</strong> &middot; <strong>Cursor</strong> &middot; <strong>Kuse</strong> &middot;<strong>any MCP client</strong>
 </p>
 
 <p align="center">

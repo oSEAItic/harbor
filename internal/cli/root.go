@@ -17,8 +17,8 @@ func NewRootCmd(version string, sourceDir ...string) *cobra.Command {
 		Short: "Context infrastructure for AI agents",
 		Long: `Harbor — Context infrastructure for AI agents.
 
-Harbor fetches data from external APIs and returns structured context:
-curated fields, source provenance, timestamps, and cross-session memory.
+Every response includes curated fields (noise removed), source + timestamp
+(so you can cite and check freshness), and related memories from past sessions.
 
 Workflow:
   harbor get <connector.resource>      Fetch curated context

@@ -21,6 +21,10 @@
   Works with <strong>Claude Code</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>any MCP client</strong> &middot; <strong>any function-calling LLM</strong>
 </p>
 
+<p align="center">
+  <sub>Harbor is agent context infrastructure by <a href="https://github.com/oseaitic">oSEAItic</a>. Not affiliated with CNCF Harbor (container registry).</sub>
+</p>
+
 ---
 
 ## Before / After

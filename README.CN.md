@@ -21,6 +21,10 @@
   支持 <strong>Claude Code</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>任何 MCP 客户端</strong> &middot; <strong>任何支持函数调用的 LLM</strong>
 </p>
 
+<p align="center">
+  <sub>Harbor 是 <a href="https://github.com/oseaitic">oSEAItic</a> 的 Agent 上下文基础设施。与 CNCF Harbor（容器仓库）无关。</sub>
+</p>
+
 ---
 
 ## Before / After

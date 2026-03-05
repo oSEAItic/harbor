@@ -19,24 +19,18 @@ func newRecallCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "recall [connector.resource]",
+		Use:   "recall [connector.resource | mem_ID]",
 		Short: "Recall data from memory",
 		Long: `Recall previously fetched data from Harbor's memory layer.
 
-By default, returns the compact layer (summary fields + natural language summary).
+With no arguments, lists recent memories (same as --list).
 
-  --layer raw|normalized|compact|summary   Pick a specific layer
-  --since 1h                               Only show memories newer than duration
-  --list                                   List recent memories
-  --search "query"                         Search memories by keyword
-  -p key=value                             Filter by params
-
-Examples:
-  harbor recall coingecko.trending
-  harbor recall coingecko.trending --layer summary
-  harbor recall yahoo.quote -p symbols=AAPL --layer raw
-  harbor recall --list
-  harbor recall --list --since 1h`,
+  harbor recall                            List recent memories
+  harbor recall coingecko.trending         Recall latest for a resource
+  harbor recall mem_abc123                 Recall a specific memory by ID
+  harbor recall --search "bitcoin"         Search by keyword
+  harbor recall --layer summary            Pick a specific layer
+  harbor recall --since 1h                 Only show recent memories`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := memory.NewStore()
@@ -54,8 +48,8 @@ Examples:
 				sinceDuration = d
 			}
 
-			// --list mode: show table of recent memories
-			if list {
+			// --list mode or bare recall: show table of recent memories
+			if list || (len(args) == 0 && search == "") {
 				return recallList(cmd, store, sinceDuration)
 			}
 
@@ -64,14 +58,21 @@ Examples:
 				return recallSearch(cmd, store, search, sinceDuration)
 			}
 
-			// Require connector.resource for non-list modes
-			if len(args) == 0 {
-				return fmt.Errorf("specify <connector.resource> or use --list")
+			// Positional arg: either a memory ID (mem_xxx) or connector.resource
+			arg := args[0]
+
+			// Direct memory ID lookup
+			if strings.HasPrefix(arg, "mem_") {
+				obj, err := store.Get(arg)
+				if err != nil {
+					return fmt.Errorf("memory %q not found: %w", arg, err)
+				}
+				return outputFromMemory(cmd, obj, layer)
 			}
 
-			parts := strings.SplitN(args[0], ".", 2)
+			parts := strings.SplitN(arg, ".", 2)
 			if len(parts) != 2 {
-				return fmt.Errorf("resource must be in format <connector>.<resource>, got %q", args[0])
+				return fmt.Errorf("expected <connector.resource> or mem_<ID>, got %q", arg)
 			}
 			connectorName, resource := parts[0], parts[1]
 

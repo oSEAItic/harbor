@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,7 +88,7 @@ func Install(name string, opts InstallOptions) error {
 	}
 	fmt.Printf("  checksum: %s\n", actual)
 
-	return writeConnector(name, body)
+	return writeConnector(name, body, entry.Runtime)
 }
 
 // InstallFromLocal copies a local bundle file into the connectors directory.
@@ -108,14 +109,22 @@ func InstallFromLocal(name, path string, opts InstallOptions) error {
 	}
 	fmt.Printf("  checksum: %s\n", actual)
 
-	return writeConnector(name, data)
+	return writeConnector(name, data, "")
 }
 
 // writeConnector writes bundle bytes to the connectors dir and makes it executable.
-func writeConnector(name string, data []byte) error {
+// For Node.js connectors, a shebang line is prepended so the OS can exec them directly.
+func writeConnector(name string, data []byte, runtime string) error {
 	dir := connector.ConnectorsDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating connectors dir: %w", err)
+	}
+
+	// Prepend shebang for interpreted runtimes so the OS can exec directly.
+	if runtime == "node" && !bytes.HasPrefix(data, []byte("#!")) {
+		data = append([]byte("#!/usr/bin/env node\n"), data...)
+	} else if runtime == "python" && !bytes.HasPrefix(data, []byte("#!")) {
+		data = append([]byte("#!/usr/bin/env python3\n"), data...)
 	}
 
 	destPath, err := connector.SafeConnectorPath(name)

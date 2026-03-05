@@ -118,7 +118,7 @@ func InstallFromCloud(name string, cfg *cloudauth.Config) error {
 	}
 
 	// Reuse the existing writeConnector function (same package)
-	return writeConnector(name, data)
+	return writeConnector(name, data, "")
 }
 
 // ListCloudConnectors returns the list of connectors the user has published to cloud.

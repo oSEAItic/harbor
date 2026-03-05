@@ -47,7 +47,7 @@ func newSchemaHistoryCmd() *cobra.Command {
 				return fmt.Errorf("reading history: %w", err)
 			}
 			if len(history) == 0 {
-				return fmt.Errorf("no schema history for %q", toolName)
+				return fmt.Errorf("no schema history for %q (built-in connectors use static schemas; only proxy-learned schemas have history)", toolName)
 			}
 
 			if asJSON {

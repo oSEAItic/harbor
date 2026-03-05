@@ -17,11 +17,14 @@ func NewRootCmd(version string, sourceDir ...string) *cobra.Command {
 		Short: "Context infrastructure for AI agents",
 		Long: `Harbor — Context infrastructure for AI agents.
 
-Quick start:
-  harbor list                          See available connectors
-  harbor install coingecko             Install a connector
-  harbor get coingecko.trending        Fetch data
-  harbor mcp                           Start MCP server for agents`,
+Harbor fetches data from external APIs and returns structured context:
+curated fields, source provenance, timestamps, and cross-session memory.
+
+Workflow:
+  harbor get <connector.resource>      Fetch curated context
+  harbor remember <connector> "note"   Save analysis for next session
+  harbor recall --search "query"       Search past data and notes
+  harbor mcp                           Start MCP server (all tools)`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {

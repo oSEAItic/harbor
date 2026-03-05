@@ -3,22 +3,22 @@
 </p>
 
 <p align="center">
-  <strong>别再给 LLM 喂原始 JSON 了。</strong><br/>
-  Harbor 标准化、精选、管控流入 AI Agent 的数据 —— 任何来源，任何密度，由你掌控。
+  <strong>Claude 分析。Gemini 接力。Harbor 记住一切。</strong><br/>
+  AI Agent 的共享记忆与结构化上下文 —— 任何模型，任何客户端，一个记忆层。
 </p>
 
 <p align="center">
   <a href="#快速开始">快速开始</a> &middot;
   <a href="#问题">问题</a> &middot;
+  <a href="#跨-agent-记忆">跨 Agent 记忆</a> &middot;
   <a href="#mcp-集成">MCP 集成</a> &middot;
   <a href="#创建连接器">构建连接器</a> &middot;
   <a href="AGENTS.md">Agent 文档</a> &middot;
-  <a href="LICENSE">许可证</a> &middot;
   <a href="README.md">English</a>
 </p>
 
 <p align="center">
-  支持 <strong>Claude Code</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>任何 MCP 客户端</strong> &middot; <strong>任何支持函数调用的 LLM</strong>
+  支持 <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>任何 MCP 客户端</strong>
 </p>
 
 <p align="center">
@@ -27,41 +27,29 @@
 
 ---
 
-## Before / After
+## 跨 Agent 记忆
 
-Agent 调用 CoinGecko，它看到的是这个：
+Claude Code 分析你的加密货币持仓。关掉会话。之后另一个 Agent 接上 Claude 的思路 —— 不用复制粘贴，不用重新提问。
 
-```json
-{"bitcoin":{"usd":67234.12,"usd_market_cap":1320984173209,"usd_24h_vol":28394857234,
-"usd_24h_change":2.34,"last_updated_at":1707900000},"ethereum":{"usd":3456.78,
-"usd_market_cap":415678234567,"usd_24h_vol":12948573456,"usd_24h_change":-0.82,
-"last_updated_at":1707900000},"solana":{"usd":134.56,"usd_market_cap":58234567890,
-"usd_24h_vol":3948573456,"usd_24h_change":5.67,"last_updated_at":1707900000}}
-```
+<p align="center">
+  <img src="assets/cross-agent-openclaw.png" alt="另一个 Agent 从 Harbor 记忆中读取 Claude Code 的分析" width="900" />
+</p>
 
-没有 Schema。没有来源归属。不知道哪些字段重要。模型不得不浪费 token 去*搞清楚自己在看什么*，然后才能开始推理。
+<p align="center">
+  <em>"Market Snapshot (from Claude Code's analysis 17 mins ago)" —— 一个完全不同的 Agent，从 Harbor 记忆中读取 Claude 的工作成果。零重复提问。</em>
+</p>
 
-用 Harbor 之后：
+背后的机制：
 
-```json
-{
-  "data": [
-    { "id": "bitcoin",  "price_usd": 67234.12, "change_24h": 2.34 },
-    { "id": "ethereum", "price_usd": 3456.78,  "change_24h": -0.82 },
-    { "id": "solana",   "price_usd": 134.56,   "change_24h": 5.67 }
-  ],
-  "meta": {
-    "source": "coingecko",
-    "schema": "crypto.prices.v1",
-    "fetched_at": "2026-02-14T12:00:00Z",
-    "context": { "summary": "BTC/ETH 相关性高。SOL 波动剧烈。", "age": "2h ago" },
-    "recalls": [{ "resource": "coingecko.prices", "age": "1d ago", "summary": "BTC $65k..." }]
-  },
-  "errors": []
-}
-```
+<p align="center">
+  <img src="assets/download.png" alt="Claude 通过 harbor remember 保存分析 → 下一个 Agent 通过 meta.context 读取" width="900" />
+</p>
 
-自描述。精选字段。来源和时间戳。跨会话记忆。零 token 浪费在格式上 —— 全部用于推理。
+<p align="center">
+  <em>右侧：Claude Code 通过 <code>harbor remember</code> 保存分析结论。左侧：下一个 Agent 自动通过 <code>meta.context</code> 接收。</em>
+</p>
+
+你机器上的每个 Agent 共享同一个记忆层。一个 Agent 保存洞察，所有后续对该连接器的调用都会携带这个洞察 —— 跨会话、跨模型、跨工具。
 
 ---
 
@@ -84,7 +72,7 @@ harbor install coingecko
 harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 ```
 
-### 添加到 Claude Code / Cursor
+### 添加到 Claude Code / Cursor / Gemini
 
 ```json
 {
@@ -128,7 +116,7 @@ Agent 框架关注的是*编排* —— 调用哪个工具、何时循环、如�
 
 **噪声。** 200 个字段的响应中可能只有 6 个是 Agent 需要的。其余的分散注意力、推高成本。
 
-**泄漏。** "读取发票"的调用在财务摘要旁边返回员工 PII。原始 API 不尊重角色边界。数据一旦进入上下文窗口就意味着暴露 —— 暴露给模型、日志和 prompt 注入攻击。
+**失忆。** Agent A 分析完数据，会话结束。Agent B 从零开始 —— 重新获取、重新分析、重新推理。Agent 之间、会话之间、模型之间没有共享记忆。
 
 Harbor 解决这三个问题。三大支柱：
 
@@ -146,8 +134,6 @@ Agent 调用 `harbor_learn_schema` 告诉 Harbor 哪些字段重要。Harbor 永
 | `normalized` | 结构化 `data[]` | 常规 Agent 推理 |
 | `compact` | 仅摘要字段 | token 受限的上下文 |
 | `summary` | 自然语言一行摘要 | 快速浏览、规划 |
-
-漂移检测监控上游 API —— 如果字段结构变化，Harbor 自动适应。
 
 ### 管控 —— Agent 只看到它该看到的
 
@@ -178,7 +164,7 @@ harbor_remember(connector="coingecko",      # 保存分析结论
   note="BTC/ETH 相关性高...")
 ```
 
-备注作为 `meta.context` 出现在未来每一次调用中 —— 跨会话、跨设备的机构记忆。
+通过 `harbor_remember` 保存的备注会作为 `meta.context` 出现在未来每一次调用中 —— **这就是 Agent 跨会话、跨模型共享记忆的方式。**
 
 ### 凭证注入
 
@@ -193,6 +179,36 @@ harbor_remember(connector="coingecko",      # 保存分析结论
                "npx", "@modelcontextprotocol/server-github"]
     }
   }
+}
+```
+
+---
+
+## 实际效果
+
+原始 CoinGecko 响应 —— 没有 schema，没有来源，没有记忆：
+
+```json
+{"bitcoin":{"usd":67234.12,"usd_market_cap":1320984173209,"usd_24h_vol":28394857234,
+"usd_24h_change":2.34,"last_updated_at":1707900000},"ethereum":{"usd":3456.78,...}}
+```
+
+经过 Harbor —— 结构化、有归属、带跨会话上下文：
+
+```json
+{
+  "data": [
+    { "id": "bitcoin",  "price_usd": 67234.12, "change_24h": 2.34 },
+    { "id": "ethereum", "price_usd": 3456.78,  "change_24h": -0.82 }
+  ],
+  "meta": {
+    "source": "coingecko",
+    "schema": "crypto.prices.v1",
+    "fetched_at": "2026-03-05T12:00:00Z",
+    "context": { "summary": "BTC 主导地位上升。SOL 波动剧烈。" },
+    "recalls": [{ "resource": "coingecko.prices", "age": "1d", "summary": "BTC $71k..." }]
+  },
+  "errors": []
 }
 ```
 
@@ -259,27 +275,29 @@ main();
 
 Harbor 附带 **[AGENTS.md](AGENTS.md)** —— 结构化指令，任何 AI Agent 都能直接读取并据此行动。涵盖每个 CLI 命令、每个 MCP 工具、常见工作流决策树和错误恢复模式。
 
-这个文件是 Harbor 哲学的具象化：如果你的工具是 Agent 基础设施，你的文档就应该是 Agent 原生的。
+如果你的工具是 Agent 基础设施，你的文档就应该是 Agent 原生的。
 
 ---
 
 ## 架构
 
 ```
-Agent (Claude Code, Cursor, GPT-4, 任意 LLM)
-  |
-  | MCP / 工具调用
-  v
-Harbor
-  |  标准化 --> 精选 --> 管控
-  |  Schema 学习 <--> 漂移检测
-  |  记忆存储 <--> 跨会话检索
-  |
-  v
-连接器 + MCP 服务器 (任意来源)
-  |
-  v
-API / 数据库 / 服务
+Agent A (Claude Code)     Agent B (Gemini)     Agent C (Cursor)
+  \                         |                    /
+   \                        |                   /
+    +----------- MCP / 工具调用 ---------------+
+                        |
+                        v
+                     Harbor
+      标准化 --> 精选 --> 管控
+      Schema 学习 <--> 漂移检测
+      记忆存储 <--> 跨会话检索
+                        |
+                        v
+          连接器 + MCP 服务器 (任意来源)
+                        |
+                        v
+              API / 数据库 / 服务
 ```
 
 ---

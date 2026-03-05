@@ -170,9 +170,12 @@ Persist your analysis conclusions for future sessions.
 ```json
 {
   "connector": "coingecko",
-  "note": "BTC/ETH correlation high (r=0.94). SOL volatile (+40% weekly). Market bullish but elevated risk."
+  "note": "BTC/ETH correlation high (r=0.94). SOL volatile (+40% weekly). Market bullish but elevated risk.",
+  "author": "Claude Code"
 }
 ```
+
+**Always pass your name in `author`** — e.g. `"Claude Code"`, `"Gemini"`, `"Cursor"`, `"GPT-4"`. This lets the next agent (which may be a different model) know who produced the analysis. If omitted, Harbor attempts auto-detection from environment variables.
 
 Your note appears as `meta.context` on every future call to this connector — for you and every other agent. Compose a comprehensive summary covering:
 1. What you analyzed and why
@@ -255,7 +258,7 @@ Every Harbor response follows this structure:
     "schema": "domain.resource.v1",
     "fetched_at": "ISO-8601 timestamp",
     "request_id": "UUID",
-    "context": { "summary": "...", "age": "..." },
+    "context": { "summary": "...", "age": "...", "author": "Claude Code" },
     "recalls": [{ "id": "...", "resource": "...", "age": "...", "summary": "..." }],
     "memory_hint": "Call harbor_remember after analysis"
   },

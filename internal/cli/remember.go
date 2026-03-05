@@ -10,6 +10,8 @@ import (
 )
 
 func newRememberCmd() *cobra.Command {
+	var author string
+
 	cmd := &cobra.Command{
 		Use:   "remember <connector> <note>",
 		Short: "Save analysis conclusions about a connector for future sessions",
@@ -25,8 +27,8 @@ Before writing, consider summarising:
   - Recommendations you made
 
 Example:
-  harbor remember kuse-hive \
-    "LLM call is the bottleneck (P99=8s). Network ruled out. Recommend prompt cache."`,
+  harbor remember coingecko "BTC dominance rising. SOL underperforming."
+  harbor remember --author "Claude Code" coingecko "Market analysis..."`,
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connector := args[0]
@@ -46,7 +48,7 @@ Example:
 				}
 			}
 
-			id, err := store.SaveNote(connector, note)
+			id, err := store.SaveNote(connector, note, author)
 			if err != nil {
 				return fmt.Errorf("saving note: %w", err)
 			}
@@ -56,5 +58,6 @@ Example:
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&author, "author", "", "Agent/model name (e.g. 'Claude Code', 'Gemini')")
 	return cmd
 }

@@ -24,6 +24,7 @@ type Object struct {
 	Params     map[string]string `json:"params,omitempty"`
 	CreatedAt  time.Time         `json:"created_at"`
 	TTLSeconds int               `json:"ttl_seconds"`
+	Author     string            `json:"author,omitempty"`
 	Layers     Layers            `json:"layers"`
 	Meta       ObjectMeta        `json:"meta"`
 }
@@ -58,6 +59,7 @@ type IndexEntry struct {
 	BytesRaw     int               `json:"bytes_raw"`
 	BytesCompact int               `json:"bytes_compact"`
 	Summary      string            `json:"summary,omitempty"`
+	Author       string            `json:"author,omitempty"`
 }
 
 // SearchResult is a memory entry with a relevance score for search results.

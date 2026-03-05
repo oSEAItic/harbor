@@ -45,6 +45,7 @@ type MemoryRef struct {
 type ContextRef struct {
 	Summary string `json:"summary"`
 	Age     string `json:"age"`
+	Author  string `json:"author,omitempty"`
 }
 
 // Meta contains provenance and versioning information.

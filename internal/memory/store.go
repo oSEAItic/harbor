@@ -131,6 +131,7 @@ func (s *Store) Save(obj *Object) (string, error) {
 		BytesRaw:     obj.Meta.BytesRaw,
 		BytesCompact: obj.Meta.BytesCompact,
 		Summary:      obj.Layers.Summary,
+		Author:       obj.Author,
 	})
 
 	// Note soft versioning: keep only the most recent maxNoteVersions per connector.
@@ -182,12 +183,14 @@ func (s *Store) Save(obj *Object) (string, error) {
 // SaveNote persists a connector-level analysis note written by an agent via harbor_remember.
 // Notes use Resource="_context" and SchemaNote to distinguish them from data fetch objects.
 // Multiple notes for the same connector accumulate (no deduplication).
-func (s *Store) SaveNote(connector, note string) (string, error) {
+// The optional author field records which agent wrote the note (e.g. "Claude Code", "Gemini").
+func (s *Store) SaveNote(connector, note, author string) (string, error) {
 	obj := &Object{
 		Connector:  connector,
 		Resource:   "_context",
 		Schema:     SchemaNote,
 		TTLSeconds: 0, // notes never expire
+		Author:     author,
 		Layers:     Layers{Summary: note},
 	}
 	return s.Save(obj)

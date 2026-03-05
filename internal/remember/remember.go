@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -19,6 +21,8 @@ func ToolDefinition() mcp.Tool {
 			"Call this after completing meaningful analysis of a data source. "+
 			"Your note will appear as 'context' at the start of every future session with this connector — "+
 			"so you or any other agent won't need to re-derive the same insights. "+
+			"IMPORTANT: Always pass your name in the 'author' field (e.g. 'Claude Code', 'Gemini', 'Cursor', 'GPT-4'). "+
+			"This lets the next agent know who produced the analysis. "+
 			"Before calling, compose a comprehensive summary covering: "+
 			"(1) what you analyzed and why, "+
 			"(2) patterns or anomalies found, "+
@@ -34,6 +38,10 @@ func ToolDefinition() mcp.Tool {
 				"note": {
 					"type": "string",
 					"description": "Your comprehensive analysis summary for this connector's data source"
+				},
+				"author": {
+					"type": "string",
+					"description": "Your agent/model name (e.g. 'Claude Code', 'Gemini', 'Cursor'). If omitted, Harbor auto-detects from environment."
 				}
 			},
 			"required": ["connector", "note"]
@@ -50,6 +58,7 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 
 		connector := req.GetString("connector", "")
 		note := req.GetString("note", "")
+		author := req.GetString("author", "")
 
 		if connector == "" {
 			return mcp.NewToolResultError("connector is required"), nil
@@ -58,7 +67,11 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("note is required"), nil
 		}
 
-		id, err := store.SaveNote(connector, note)
+		if author == "" {
+			author = detectAgent()
+		}
+
+		id, err := store.SaveNote(connector, note, author)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to save note: %v", err)), nil
 		}
@@ -71,9 +84,33 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 			}
 		}()
 
-		return mcp.NewToolResultText(fmt.Sprintf(
-			"Saved note for %q (%s). This will appear as context in future sessions with this connector.",
-			connector, id,
-		)), nil
+		msg := fmt.Sprintf("Saved note for %q (%s).", connector, id)
+		if author != "" {
+			msg += fmt.Sprintf(" Author: %s.", author)
+		}
+		msg += " This will appear as context in future sessions with this connector."
+
+		return mcp.NewToolResultText(msg), nil
 	}
+}
+
+// detectAgent attempts to identify the calling agent from environment variables.
+func detectAgent() string {
+	// Claude Code / Anthropic
+	if os.Getenv("CLAUDE_CODE") != "" || strings.Contains(strings.ToLower(os.Getenv("TERM_PROGRAM")), "claude") {
+		return "Claude Code"
+	}
+	// Cursor
+	if strings.Contains(strings.ToLower(os.Getenv("TERM_PROGRAM")), "cursor") {
+		return "Cursor"
+	}
+	// Gemini CLI
+	if os.Getenv("GEMINI_API_KEY") != "" || strings.Contains(strings.ToLower(os.Getenv("TERM_PROGRAM")), "gemini") {
+		return "Gemini"
+	}
+	// Generic MCP client identifier
+	if client := os.Getenv("MCP_CLIENT_NAME"); client != "" {
+		return client
+	}
+	return ""
 }

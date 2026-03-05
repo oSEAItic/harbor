@@ -211,6 +211,7 @@ func main() {
 		var req struct {
 			Connector string `json:"connector"`
 			Note      string `json:"note"`
+			Author    string `json:"author"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
@@ -229,7 +230,7 @@ func main() {
 			return
 		}
 
-		id, err := memStore.SaveNote(req.Connector, req.Note)
+		id, err := memStore.SaveNote(req.Connector, req.Note, req.Author)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("save failed: %v", err)})

@@ -239,6 +239,7 @@ func buildContext(store *memory.Store, connectorName string) *protocol.ContextRe
 	return &protocol.ContextRef{
 		Summary: results[0].Summary,
 		Age:     formatMemoryAge(results[0].CreatedAt),
+		Author:  results[0].Author,
 	}
 }
 

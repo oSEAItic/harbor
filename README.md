@@ -3,22 +3,22 @@
 </p>
 
 <p align="center">
-  <strong>Stop feeding raw JSON to your LLM.</strong><br/>
-  Harbor normalizes, curates, and governs data flowing into AI agents — any source, any density, your control.
+  <strong>Claude analyzes. Gemini continues. Harbor remembers.</strong><br/>
+  Shared memory and structured context for AI agents — any model, any client, one memory layer.
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#the-problem">The Problem</a> &middot;
+  <a href="#cross-agent-memory">Cross-Agent Memory</a> &middot;
   <a href="#mcp-integration">MCP Integration</a> &middot;
   <a href="#creating-a-connector">Build a Connector</a> &middot;
   <a href="AGENTS.md">Agent Docs</a> &middot;
-  <a href="LICENSE">License</a> &middot;
   <a href="README.CN.md">中文</a>
 </p>
 
 <p align="center">
-  Works with <strong>Claude Code</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>any MCP client</strong> &middot; <strong>any function-calling LLM</strong>
+  Works with <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>any MCP client</strong>
 </p>
 
 <p align="center">
@@ -27,41 +27,29 @@
 
 ---
 
-## Before / After
+## Cross-Agent Memory
 
-Your agent calls CoinGecko. This is what it sees:
+Claude Code analyzes your crypto portfolio. You close the session. Later, a different agent picks up where Claude left off — no copy-paste, no re-prompting.
 
-```json
-{"bitcoin":{"usd":67234.12,"usd_market_cap":1320984173209,"usd_24h_vol":28394857234,
-"usd_24h_change":2.34,"last_updated_at":1707900000},"ethereum":{"usd":3456.78,
-"usd_market_cap":415678234567,"usd_24h_vol":12948573456,"usd_24h_change":-0.82,
-"last_updated_at":1707900000},"solana":{"usd":134.56,"usd_market_cap":58234567890,
-"usd_24h_vol":3948573456,"usd_24h_change":5.67,"last_updated_at":1707900000}}
-```
+<p align="center">
+  <img src="assets/cross-agent-openclaw.png" alt="Another agent reads Claude Code's analysis from Harbor memory" width="900" />
+</p>
 
-No schema. No source attribution. No way to know which fields matter. The model burns tokens just *figuring out what it's looking at* before it can start reasoning.
+<p align="center">
+  <em>"Market Snapshot (from Claude Code's analysis 17 mins ago)" — a completely different agent, reading Claude's work from Harbor memory. Zero re-prompting.</em>
+</p>
 
-With Harbor:
+Under the hood:
 
-```json
-{
-  "data": [
-    { "id": "bitcoin",  "price_usd": 67234.12, "change_24h": 2.34 },
-    { "id": "ethereum", "price_usd": 3456.78,  "change_24h": -0.82 },
-    { "id": "solana",   "price_usd": 134.56,   "change_24h": 5.67 }
-  ],
-  "meta": {
-    "source": "coingecko",
-    "schema": "crypto.prices.v1",
-    "fetched_at": "2026-02-14T12:00:00Z",
-    "context": { "summary": "BTC/ETH correlation high. SOL volatile.", "age": "2h ago" },
-    "recalls": [{ "resource": "coingecko.prices", "age": "1d ago", "summary": "BTC at $65k..." }]
-  },
-  "errors": []
-}
-```
+<p align="center">
+  <img src="assets/download.png" alt="Claude saves analysis via harbor remember → next agent reads it via meta.context" width="900" />
+</p>
 
-Self-describing. Curated fields. Source and timestamp. Cross-session memory. Zero tokens wasted on format — all tokens on reasoning.
+<p align="center">
+  <em>Right: Claude Code saves its analysis via <code>harbor remember</code>. Left: the next agent automatically receives it as <code>meta.context</code>.</em>
+</p>
+
+Every agent on your machine shares the same memory layer. When one agent saves an insight, every future call to that connector carries it forward — across sessions, across models, across tools.
 
 ---
 
@@ -84,7 +72,7 @@ harbor install coingecko
 harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 ```
 
-### Add to Claude Code / Cursor
+### Add to Claude Code / Cursor / Gemini
 
 ```json
 {
@@ -114,7 +102,7 @@ Already using an MCP server? Wrap it with Harbor — one line, no code changes:
 }
 ```
 
-Harbor re-discovers upstream tools. The agent teaches compression via plain text hints. Every future call is curated automatically.
+Harbor re-discovers upstream tools. The agent teaches curation via plain text hints. Every future call is curated automatically.
 
 ---
 
@@ -128,7 +116,7 @@ Three things go wrong:
 
 **Noise.** A 200-field response might contain 6 fields the agent needs. The rest dilutes attention and inflates cost.
 
-**Leakage.** A "read invoices" call returns employee PII alongside financial summaries. Raw APIs don't respect role boundaries. Once data enters the context window, it's exposed — to the model, to the logs, to prompt injection attacks.
+**Amnesia.** Agent A analyzes data, then the session ends. Agent B starts fresh — re-fetching, re-analyzing, re-reasoning. There's no shared memory between agents, sessions, or models.
 
 Harbor solves all three. Three pillars:
 
@@ -146,8 +134,6 @@ The agent teaches Harbor what matters by calling `harbor_learn_schema`. Harbor r
 | `normalized` | Structured `data[]` | Standard agent reasoning |
 | `compact` | Summary fields only | Token-efficient contexts |
 | `summary` | Natural language one-liner | Quick scanning, planning |
-
-Drift detection monitors upstream APIs — if fields change shape, Harbor adapts.
 
 ### Govern — Only what agents should see
 
@@ -178,7 +164,7 @@ harbor_remember(connector="coingecko",      # Save analysis conclusions
   note="BTC/ETH correlation high...")
 ```
 
-Notes appear as `meta.context` on every future call — cross-session, cross-device institutional memory.
+Notes saved via `harbor_remember` appear as `meta.context` on every future call to that connector — **this is how agents share memory across sessions and across models.**
 
 ### Credential injection
 
@@ -193,6 +179,36 @@ Inject API keys from the OS keychain — secrets never appear in config files:
                "npx", "@modelcontextprotocol/server-github"]
     }
   }
+}
+```
+
+---
+
+## What it looks like
+
+Raw CoinGecko response — no schema, no source, no memory:
+
+```json
+{"bitcoin":{"usd":67234.12,"usd_market_cap":1320984173209,"usd_24h_vol":28394857234,
+"usd_24h_change":2.34,"last_updated_at":1707900000},"ethereum":{"usd":3456.78,...}}
+```
+
+Through Harbor — structured, attributed, with cross-session context:
+
+```json
+{
+  "data": [
+    { "id": "bitcoin",  "price_usd": 67234.12, "change_24h": 2.34 },
+    { "id": "ethereum", "price_usd": 3456.78,  "change_24h": -0.82 }
+  ],
+  "meta": {
+    "source": "coingecko",
+    "schema": "crypto.prices.v1",
+    "fetched_at": "2026-03-05T12:00:00Z",
+    "context": { "summary": "BTC dominance rising. SOL volatile." },
+    "recalls": [{ "resource": "coingecko.prices", "age": "1d", "summary": "BTC at $71k..." }]
+  },
+  "errors": []
 }
 ```
 
@@ -259,27 +275,29 @@ See [CONNECTOR_SPEC.md](docs/CONNECTOR_SPEC.md) for the full interface contract.
 
 Harbor ships with **[AGENTS.md](AGENTS.md)** — structured instructions that any AI agent can read and act on. It covers every CLI command, every MCP tool, decision trees for common workflows, and error recovery patterns.
 
-This file is Harbor's philosophy made concrete: if your tool is agent infrastructure, your documentation should be agent-native too.
+If your tool is agent infrastructure, your documentation should be agent-native too.
 
 ---
 
 ## Architecture
 
 ```
-Agent (Claude Code, Cursor, GPT-4, any LLM)
-  |
-  | MCP / tool call
-  v
-Harbor
-  |  Normalize --> Curate --> Govern
-  |  Schema Learning <--> Drift Detection
-  |  Memory Store <--> Cross-Session Recall
-  |
-  v
-Connectors + MCP Servers (any source)
-  |
-  v
-APIs / Databases / Services
+Agent A (Claude Code)     Agent B (Gemini)     Agent C (Cursor)
+  \                         |                    /
+   \                        |                   /
+    +----------- MCP / tool call --------------+
+                        |
+                        v
+                     Harbor
+      Normalize --> Curate --> Govern
+      Schema Learning <--> Drift Detection
+      Memory Store <--> Cross-Session Recall
+                        |
+                        v
+          Connectors + MCP Servers (any source)
+                        |
+                        v
+              APIs / Databases / Services
 ```
 
 ---

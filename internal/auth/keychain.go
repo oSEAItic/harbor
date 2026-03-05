@@ -132,7 +132,7 @@ func indexSave(entries []KeyEntry) {
 		return
 	}
 	os.MkdirAll(harborhome.RootDir(), 0o755)
-	os.WriteFile(indexPath(), data, 0o644)
+	os.WriteFile(indexPath(), data, 0o600)
 }
 
 func indexAdd(name string) {

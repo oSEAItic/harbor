@@ -3,46 +3,61 @@
 </p>
 
 <p align="center">
-  <strong>Give your AI agent structured context from any API.</strong><br/>
-  Normalize, curate, and govern data flowing into LLMs — any source, any density, your control.
+  <strong>Stop feeding raw JSON to your LLM.</strong><br/>
+  Harbor normalizes, curates, and governs data flowing into AI agents — any source, any density, your control.
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &middot;
-  <a href="#why-harbor">Why Harbor</a> &middot;
+  <a href="#the-problem">The Problem</a> &middot;
   <a href="#mcp-integration">MCP Integration</a> &middot;
   <a href="#creating-a-connector">Build a Connector</a> &middot;
+  <a href="AGENTS.md">Agent Docs</a> &middot;
   <a href="LICENSE">License</a> &middot;
   <a href="README.CN.md">中文</a>
 </p>
 
+<p align="center">
+  Works with <strong>Claude Code</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>any MCP client</strong> &middot; <strong>any function-calling LLM</strong>
+</p>
+
 ---
 
-## 30-Second Demo
+## Before / After
 
-```bash
-$ harbor install coingecko
-Installing coingecko v0.2.0... done.
+Your agent calls CoinGecko. This is what it sees:
 
-$ harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
+```json
+{"bitcoin":{"usd":67234.12,"usd_market_cap":1320984173209,"usd_24h_vol":28394857234,
+"usd_24h_change":2.34,"last_updated_at":1707900000},"ethereum":{"usd":3456.78,
+"usd_market_cap":415678234567,"usd_24h_vol":12948573456,"usd_24h_change":-0.82,
+"last_updated_at":1707900000},"solana":{"usd":134.56,"usd_market_cap":58234567890,
+"usd_24h_vol":3948573456,"usd_24h_change":5.67,"last_updated_at":1707900000}}
 ```
+
+No schema. No source attribution. No way to know which fields matter. The model burns tokens just *figuring out what it's looking at* before it can start reasoning.
+
+With Harbor:
 
 ```json
 {
   "data": [
-    { "id": "bitcoin", "price_usd": 67234.12, "market_cap_usd": 1320000000000 }
+    { "id": "bitcoin",  "price_usd": 67234.12, "change_24h": 2.34 },
+    { "id": "ethereum", "price_usd": 3456.78,  "change_24h": -0.82 },
+    { "id": "solana",   "price_usd": 134.56,   "change_24h": 5.67 }
   ],
   "meta": {
     "source": "coingecko",
     "schema": "crypto.prices.v1",
     "fetched_at": "2026-02-14T12:00:00Z",
-    "request_id": "a1b2c3d4-..."
+    "context": { "summary": "BTC/ETH correlation high. SOL volatile.", "age": "2h ago" },
+    "recalls": [{ "resource": "coingecko.prices", "age": "1d ago", "summary": "BTC at $65k..." }]
   },
   "errors": []
 }
 ```
 
-Every response is self-describing: source, schema version, timestamp, provenance. The agent never wastes tokens figuring out *what it's looking at* — it goes straight to reasoning.
+Self-describing. Curated fields. Source and timestamp. Cross-session memory. Zero tokens wasted on format — all tokens on reasoning.
 
 ---
 
@@ -54,28 +69,18 @@ Every response is self-describing: source, schema version, timestamp, provenance
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
-> **No runtime required.** Pre-compiled binary for Linux/macOS (amd64/arm64). Go, Node, Python only needed for building connectors.
+> Pre-compiled binary for Linux/macOS (amd64/arm64). No runtime required.
 
 Or from source: `go install github.com/oseaitic/harbor/cmd/harbor@latest`
 
 ### Try it
 
 ```bash
-# Install a connector and fetch data
 harbor install coingecko
 harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
-
-# Export tool schemas — drop into any function-calling agent
-harbor tools export
-harbor tools export --format openai
-
-# See what's available
-harbor list
 ```
 
-### Use with Claude Code / Cursor (MCP)
-
-Add to your MCP config (`claude_desktop_config.json` or `.cursor/mcp.json`):
+### Add to Claude Code / Cursor
 
 ```json
 {
@@ -88,48 +93,11 @@ Add to your MCP config (`claude_desktop_config.json` or `.cursor/mcp.json`):
 }
 ```
 
-Your agent now has structured access to every installed connector. Schema learning, memory, and recall work automatically through MCP tools.
+Your agent now has structured access to every installed connector, with schema learning, memory, and recall built in.
 
----
+### Proxy any existing MCP server
 
-## Why Harbor?
-
-Agent frameworks focus on *orchestration* — which tool to call, when to loop, how to plan. Nobody focuses on what happens **after** the tool call returns: the quality, safety, and relevance of the data landing in the context window.
-
-Harbor does. Three pillars:
-
-### Normalize — One format, any source
-
-Raw APIs return wildly different shapes. CoinGecko: `{"bitcoin":{"usd":67234.12}}`. Stripe: `{"data":[{"id":"txn_1abc","amount":4999}]}`. Each forces the model to guess structure, guess semantics, handle errors differently.
-
-Harbor normalizes everything into a single envelope: `data[]` + `meta{}` + `errors[]`. The agent parses one format, always knows where data came from, and never fails silently.
-
-### Curate — Right density for the task
-
-Not every task needs every field. The agent teaches Harbor what matters by calling `harbor_learn_schema` — and Harbor remembers permanently. Every future call returns only relevant fields.
-
-| Layer | Content | Use case |
-|-------|---------|----------|
-| `raw` | Original API response | Full fidelity debugging |
-| `normalized` | Structured `data[]` | Standard agent reasoning |
-| `compact` | Summary fields only | Token-efficient contexts |
-| `summary` | Natural language one-liner | Quick scanning, planning |
-
-Agents choose the density. Drift detection monitors upstream APIs — if fields change shape, Harbor adapts.
-
-### Govern — Only what agents should see
-
-A "read invoices" call might return employee PII alongside financial summaries. Raw APIs don't respect role boundaries.
-
-Harbor controls which fields enter the context window based on who's asking. Data an agent's role shouldn't see never reaches the model, the logs, or the attack surface. This isn't API-level access control ("can you call this endpoint?") — it's **context-level access control** ("what do you see when you call it?").
-
----
-
-## MCP Integration
-
-### Proxy any MCP server
-
-Wrap any existing MCP server — Notion, GitHub, filesystem, Slack. One config line. Harbor re-discovers upstream tools and the agent teaches compression via plain text hints.
+Already using an MCP server? Wrap it with Harbor — one line, no code changes:
 
 ```json
 {
@@ -142,21 +110,75 @@ Wrap any existing MCP server — Notion, GitHub, filesystem, Slack. One config l
 }
 ```
 
-### Schema learning flow
+Harbor re-discovers upstream tools. The agent teaches compression via plain text hints. Every future call is curated automatically.
 
-Harbor never calls an LLM. The connected agent **is** the LLM:
+---
 
-1. **First call** — Harbor proxies and returns raw output with a hint:
+## The Problem
+
+Agent frameworks focus on *orchestration* — which tool to call, when to loop, how to plan. Nobody focuses on what happens **after** the tool call returns.
+
+Three things go wrong:
+
+**Inconsistency.** Every API returns a different shape. The model wastes intelligence decoding format instead of reasoning about content.
+
+**Noise.** A 200-field response might contain 6 fields the agent needs. The rest dilutes attention and inflates cost.
+
+**Leakage.** A "read invoices" call returns employee PII alongside financial summaries. Raw APIs don't respect role boundaries. Once data enters the context window, it's exposed — to the model, to the logs, to prompt injection attacks.
+
+Harbor solves all three. Three pillars:
+
+### Normalize — One format, any source
+
+Every response becomes `data[]` + `meta{}` + `errors[]`. The agent parses one format, always knows where data came from, and never fails silently.
+
+### Curate — Right density for the task
+
+The agent teaches Harbor what matters by calling `harbor_learn_schema`. Harbor remembers permanently. Four layers of the same data:
+
+| Layer | Content | Use case |
+|-------|---------|----------|
+| `raw` | Original API response | Full fidelity debugging |
+| `normalized` | Structured `data[]` | Standard agent reasoning |
+| `compact` | Summary fields only | Token-efficient contexts |
+| `summary` | Natural language one-liner | Quick scanning, planning |
+
+Drift detection monitors upstream APIs — if fields change shape, Harbor adapts.
+
+### Govern — Only what agents should see
+
+Harbor controls which fields enter the context window based on who's asking. This isn't API-level access control ("can you call this endpoint?") — it's **context-level access control** ("what do you see when you call it?"). An agent that can't see a field can't leak it.
+
+---
+
+## MCP Integration
+
+### Schema learning — the agent teaches, Harbor remembers
+
+Harbor never calls an LLM internally. The connected agent **is** the LLM:
+
+1. **First call** — Harbor returns raw output with a hint:
    `[Harbor: No schema for "list_files". Call harbor_learn_schema to enable curation.]`
 2. **Agent teaches** — calls `harbor_learn_schema` with `summary_fields` and `summary_template`
-3. **Stored permanently** — all future calls are curated. Every agent benefits.
+3. **Stored permanently** — all future calls are curated. Every agent on the machine benefits.
 4. **Drift detection** — if upstream changes shape, Harbor detects and re-learns.
 
-Works with any LLM (Claude, GPT-4, Cursor, local models) — the hint is plain text.
+### Memory & Recall
+
+Every call is cached into 4-layer memory. Agents recall across sessions:
+
+```
+harbor_recall(query="bitcoin")              # Search by keyword
+harbor_recall(id="mem_abc123")              # Retrieve full content
+harbor_remember(connector="coingecko",      # Save analysis conclusions
+  note="BTC/ETH correlation high...")
+```
+
+Notes appear as `meta.context` on every future call — cross-session, cross-device institutional memory.
 
 ### Credential injection
 
-Inject API keys from the OS keychain so secrets never appear in config files:
+Inject API keys from the OS keychain — secrets never appear in config files:
 
 ```json
 {
@@ -169,28 +191,6 @@ Inject API keys from the OS keychain so secrets never appear in config files:
   }
 }
 ```
-
----
-
-## Memory & Recall
-
-Every call is cached into a 4-layer memory system. Recall across sessions:
-
-```bash
-harbor recall --list                              # Browse recent
-harbor recall --search "bitcoin"                  # Search by keyword
-harbor recall coingecko.prices --layer compact    # Retrieve specific memory
-```
-
-### Persistent context — `harbor_remember`
-
-Save analysis conclusions that persist across sessions and devices:
-
-```bash
-harbor remember coingecko "BTC/ETH correlation high (r=0.94). SOL volatile. Market bullish."
-```
-
-This appears as `meta.context` on **every future call** to that connector — for you, or any agent on any device. Notes sync to Harbor Cloud on login.
 
 ---
 
@@ -211,9 +211,7 @@ Credentials are encrypted client-side with AES-256-GCM. The server stores only c
 
 ## Creating a Connector
 
-Connectors are exec plugins — standalone binaries that read arguments and write JSON to stdout. Build in any language.
-
-### TypeScript (using harbor-sdk)
+Connectors are exec plugins — standalone programs that read arguments and write JSON to stdout. Build in any language.
 
 ```typescript
 import { parseArgs, output, buildMeta, handleDescribe } from "@oseaitic/harbor-sdk";
@@ -221,13 +219,11 @@ import { parseArgs, output, buildMeta, handleDescribe } from "@oseaitic/harbor-s
 const TOOL_SCHEMAS = [{
   type: "function",
   function: {
-    name: "myconnector_search",
+    name: "myapi_search",
     description: "Search for items",
     parameters: {
       type: "object",
-      properties: {
-        query: { type: "string", description: "Search query" },
-      },
+      properties: { query: { type: "string" } },
       required: ["query"],
     },
   },
@@ -235,61 +231,48 @@ const TOOL_SCHEMAS = [{
 
 async function main() {
   if (handleDescribe(TOOL_SCHEMAS)) return;
-
   const { resource, params, auth } = parseArgs();
-  const rawData = await fetchFromAPI(params, auth);
+  const raw = await fetch(`https://api.example.com/search?q=${params.query}`);
+  const data = await raw.json();
 
   output({
-    data: rawData.items.map((item: any) => ({
-      id: item.id,
-      title: item.name,
-      description: item.desc,
-      score: item.relevance,
+    data: data.items.map((item: any) => ({
+      id: item.id, title: item.name, score: item.relevance,
     })),
-    meta: buildMeta({
-      source: "my-connector",
-      connector_version: "0.1.0",
-      schema: "mydata.search.v1",
-    }),
+    meta: buildMeta({ source: "myapi", connector_version: "0.1.0", schema: "myapi.search.v1" }),
     raw: null,
     errors: [],
   });
 }
-
 main();
 ```
 
-### Interface contract
+See [CONNECTOR_SPEC.md](docs/CONNECTOR_SPEC.md) for the full interface contract.
 
-```
-connector --resource <name> --params '<json>' [--raw] [--describe]
-```
+---
 
-| Flag | Purpose |
-|------|---------|
-| `--resource` | Which resource to fetch |
-| `--params` | JSON object of parameters |
-| `--raw` | Include raw upstream response |
-| `--describe` | Emit tool schemas for discovery |
+## Agent-Native Documentation
 
-Auth is injected via `HARBOR_AUTH` env var — connectors never manage credentials directly.
+Harbor ships with **[AGENTS.md](AGENTS.md)** — structured instructions that any AI agent can read and act on. It covers every CLI command, every MCP tool, decision trees for common workflows, and error recovery patterns.
+
+This file is Harbor's philosophy made concrete: if your tool is agent infrastructure, your documentation should be agent-native too.
 
 ---
 
 ## Architecture
 
 ```
-Agent (Claude, GPT-4, Cursor, local LLM, ...)
+Agent (Claude Code, Cursor, GPT-4, any LLM)
   |
-  | tool call / MCP
+  | MCP / tool call
   v
 Harbor
   |  Normalize --> Curate --> Govern
   |  Schema Learning <--> Drift Detection
-  |  Memory Store <--> Recall
+  |  Memory Store <--> Cross-Session Recall
   |
   v
-Connectors (coingecko, stripe, your-source, any MCP server)
+Connectors + MCP Servers (any source)
   |
   v
 APIs / Databases / Services
@@ -300,8 +283,6 @@ APIs / Databases / Services
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
-
----
 
 <p align="center">
   Built by <a href="https://github.com/oseaitic"><strong>oSEAItic</strong></a><br/>

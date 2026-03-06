@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>Claude 分析。Gemini 接力。Harbor 记住一切。</strong><br/>
-  AI Agent 的共享记忆与结构化上下文 —— 任何模型，任何客户端，一个记忆层。
+  AI Agent 的共享上下文 —— 任何模型，任何客户端，一个协议。
 </p>
 
 <p align="center">
@@ -18,11 +18,11 @@
 </p>
 
 <p align="center">
-  支持 <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Cursor</strong> &middot; <strong>GPT-4</strong> &middot; <strong>任何 MCP 客户端</strong>
+  支持 <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Codex</strong> &middot; <strong>Cursor</strong> &middot; <strong>Minimax</strong> &middot; <strong>任何 MCP 客户端</strong> &middot; <strong>任何 Function Calling LLM</strong>
 </p>
 
 <p align="center">
-  <sub>Harbor 是 <a href="https://github.com/oseaitic">oSEAItic</a> 的 Agent 上下文基础设施。与 CNCF Harbor（容器仓库）无关。</sub>
+  <sub>Harbor 是 <a href="https://github.com/oseaitic">oSEAItic</a> 的开源 Agent 上下文协议。与 CNCF Harbor（容器仓库）无关。</sub>
 </p>
 
 ---

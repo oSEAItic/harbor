@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>Claude analyzes. Gemini continues. Harbor remembers.</strong><br/>
-  Shared memory and structured context for AI agents — any model, any client, one memory layer.
+  Shared context for AI agents — any model, any client, one protocol.
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <sub>Harbor is agent context infrastructure by <a href="https://github.com/oseaitic">oSEAItic</a>. Not affiliated with CNCF Harbor (container registry).</sub>
+  <sub>Harbor is an open-source agent context protocol by <a href="https://github.com/oseaitic">oSEAItic</a>. Not affiliated with CNCF Harbor (container registry).</sub>
 </p>
 
 ---

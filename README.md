@@ -55,24 +55,25 @@ Every agent on your machine shares the same memory layer. When one agent saves a
 
 ## Quick Start
 
-### Install
-
 ```bash
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
 > Pre-compiled binary for Linux/macOS (amd64/arm64). No runtime required.
+> Or from source: `go install github.com/oseaitic/harbor/cmd/harbor@latest`
 
-Or from source: `go install github.com/oseaitic/harbor/cmd/harbor@latest`
+**Or — paste this into your agent** (Claude Code, Cursor, Gemini, any MCP client):
 
-### Try it
-
-```bash
-harbor install coingecko
-harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
+```
+Read github.com/oSEAItic/harbor and set up Harbor for me.
 ```
 
-### Add to Claude Code / Cursor / Gemini
+The agent reads [AGENTS.md](AGENTS.md), installs Harbor, configures MCP, and starts using it — no manual setup needed.
+
+<details>
+<summary>Manual MCP config</summary>
+
+Add to your MCP config (`claude_desktop_config.json`, `.cursor/mcp.json`, etc.):
 
 ```json
 {
@@ -85,7 +86,14 @@ harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 }
 ```
 
-Your agent now has structured access to every installed connector, with schema learning, memory, and recall built in.
+Try a connector:
+
+```bash
+harbor install coingecko
+harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
+```
+
+</details>
 
 ### Proxy any existing MCP server
 

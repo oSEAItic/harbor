@@ -1,6 +1,8 @@
 # Harbor — Agent Instructions
 
 > This file is designed for AI agents (Claude Code, Codex, Gemini, Kuse, Manus etc.) that interact with Harbor. It provides structured, LLM-optimized instructions for every capability.
+>
+> Website: https://harbor.oseaitic.com | GitHub: https://github.com/oSEAItic/harbor
 
 ## What is Harbor
 

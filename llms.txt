@@ -4,7 +4,7 @@
 
 ## What is Harbor?
 
-Harbor is an open-source MCP server that sits between your AI agents and the APIs they call. It does three things:
+Harbor is open-source agent middleware that sits between your AI agents and the APIs they call. It connects via MCP natively, and also works with any function-calling agent. It does three things:
 
 1. **Your agent never asks twice** — Call 1: raw data. Call 5: raw data + context from every previous session. Harbor injects past analysis automatically — no code change, no manual recall.
 2. **47 fields in, 3 fields out** — Your agent calls an API. It returns 47 fields. Your agent uses 3. After a few calls, Harbor learns which 3 — and only sends those.

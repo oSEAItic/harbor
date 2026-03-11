@@ -1,24 +1,30 @@
 # Harbor
 
-> Open-source MCP server that gives AI agents shared memory and credential isolation. What one agent learns, every agent knows.
+> Agent-native context infrastructure. Your agent never asks twice — Harbor remembers across sessions, learns which fields matter, and controls what each agent sees.
 
 ## What is Harbor?
 
-Harbor is an agent-native context infrastructure protocol. It sits between your AI agents (Claude Code, Gemini CLI, Cursor, Codex, or any MCP client) and the APIs they call. Harbor normalizes responses, learns what fields matter, remembers context across sessions, and isolates credentials so agents never see raw API keys.
+Harbor is an open-source MCP server that sits between your AI agents and the APIs they call. It does three things:
+
+1. **Your agent never asks twice** — Call 1: raw data. Call 5: raw data + context from every previous session. Harbor injects past analysis automatically — no code change, no manual recall.
+2. **47 fields in, 3 fields out** — Your agent calls an API. It returns 47 fields. Your agent uses 3. After a few calls, Harbor learns which 3 — and only sends those.
+3. **You decide what each agent sees** — Agent A gets full price data. Agent B gets a one-line summary. Same API, same call. One policy file.
+
+Harbor works with Claude Code, Gemini CLI, Cursor, Codex, Minimax, and any MCP-compatible client.
 
 ## Key capabilities
 
-- **Cross-agent memory**: Agent A saves an insight → Agent B picks it up automatically. Works across models, sessions, and tools.
-- **Schema learning**: The agent teaches Harbor which fields matter. Harbor remembers permanently. Every future call is automatically curated.
+- **Cross-agent memory**: Agent A saves an insight → Agent B picks it up automatically. No code change. Harbor injects context into `meta.context` automatically.
+- **Schema learning**: After a few calls, Harbor learns which fields the agent actually uses and only sends those. 47 fields in, 3 fields out.
 - **Credential isolation**: Harbor holds API keys. Agents connect via MCP and never see raw secrets. What an agent can't see, it can't leak.
 - **Response normalization**: Every API response becomes `data[]` + `meta{}` + `errors[]`. One format, any source.
-- **Field-level access control (Govern)**: Controls which fields enter the context window based on who's asking.
+- **Field-level access control (Govern)**: Controls which fields enter the context window. Agent A sees full data, Agent B sees a summary.
 - **MCP proxy**: Wrap any existing MCP server with Harbor in one line — no code changes needed.
 
 ## Three pillars
 
 1. **Normalize** — Every API response becomes a consistent shape (`data[]` + `meta{}` + `errors[]`).
-2. **Curate** — The agent teaches Harbor what fields matter via `harbor_learn_schema`. Four density layers: raw, normalized, compact, summary.
+2. **Curate** — Harbor learns what fields matter via `harbor_learn_schema`. Four density layers: raw, normalized, compact, summary.
 3. **Govern** — Field-level access control. Controls what each agent sees. Agents that can't see a field can't leak it.
 
 ## Quick start

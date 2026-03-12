@@ -57,7 +57,7 @@ func CreateShare(memoryKey, layer, ttl string, cfg *Config) (*ShareResult, error
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("server returned %d", resp.StatusCode)
 	}
 

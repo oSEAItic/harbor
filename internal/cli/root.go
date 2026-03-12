@@ -60,6 +60,7 @@ Workflow:
 		newLogoutCmd(),
 		newWhoamiCmd(),
 		newSyncCmd(),
+		newImportCmd(),
 	)
 
 	// ── Develop ──────────────────────────────────────────────────
@@ -81,6 +82,7 @@ Workflow:
 		newMetricsCmd(),
 		newDoctorCmd(),
 		newUpdateCmd(version, srcDir),
+		newShareCmd(),
 	)
 
 	// ── Help ─────────────────────────────────────────────────────

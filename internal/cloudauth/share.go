@@ -70,7 +70,7 @@ func CreateShare(memoryKey, layer, ttl string, cfg *Config) (*ShareResult, error
 
 // ResolveShare calls GET /api/s/{token} to fetch a shared memory (public, no auth).
 func ResolveShare(token string, endpoint string) (*SharedMemory, error) {
-	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/s/"+token, nil)
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/s/"+token, nil)
 	if err != nil {
 		return nil, fmt.Errorf("building request: %w", err)
 	}

@@ -83,8 +83,8 @@ func TestResolveShare(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/s/tok_xyz" {
-			t.Errorf("expected /api/s/tok_xyz, got %s", r.URL.Path)
+		if r.URL.Path != "/s/tok_xyz" {
+			t.Errorf("expected /s/tok_xyz, got %s", r.URL.Path)
 		}
 
 		resp := map[string]interface{}{

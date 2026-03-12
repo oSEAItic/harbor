@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -17,13 +18,23 @@ type CloudNote struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// DeviceID returns a short identifier for the current machine (hostname).
+func DeviceID() string {
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return "unknown"
+}
+
 // PushMemory upserts a memory summary to Harbor Cloud.
-// key is "connector.resource" (e.g. "kuse-hive.traces").
+// key is "connector.resource.mem_id" (e.g. "coingecko._context.mem_abc123").
 // Called asynchronously from Store.Save; errors are silently dropped.
 func PushMemory(key, content, author string, cfg *Config) error {
 	payload := map[string]string{"content": content}
 	if author != "" {
-		payload["author"] = author
+		payload["author"] = author + " @ " + DeviceID()
+	} else {
+		payload["author"] = DeviceID()
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

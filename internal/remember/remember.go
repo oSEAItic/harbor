@@ -79,7 +79,7 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 		// Best-effort cloud push — sync note to cloud for cross-device recall.
 		go func() {
 			if cfg, err := cloudauth.Load(); err == nil {
-				key := connector + "._context"
+				key := connector + "._context." + id
 				_ = cloudauth.PushMemory(key, note, author, cfg)
 			}
 		}()

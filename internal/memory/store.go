@@ -172,7 +172,7 @@ func (s *Store) Save(obj *Object) (string, error) {
 
 	// Best-effort async cloud push — non-blocking, never fails the local save.
 	if s.CloudPush != nil && obj.Layers.Summary != "" {
-		key := obj.Connector + "." + obj.Resource
+		key := obj.Connector + "." + obj.Resource + "." + obj.ID
 		summary := obj.Layers.Summary
 		go s.CloudPush(key, summary)
 	}

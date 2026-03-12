@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/spf13/cobra"
 )
@@ -33,6 +34,11 @@ With no arguments, lists recent memories (same as --list).
   harbor recall --since 1h                 Only show recent memories`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Silent bidirectional cloud sync before reading.
+			if cfg, err := cloudauth.Load(); err == nil {
+				silentCloudSync(cfg)
+			}
+
 			store, err := memory.NewStore()
 			if err != nil {
 				return fmt.Errorf("opening memory store: %w", err)
@@ -219,4 +225,44 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh", h)
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// silentCloudSync performs bidirectional memory sync with Harbor Cloud.
+// Push: local notes not yet in cloud. Pull: cloud notes not yet local.
+// All errors are silently ignored — this must never block recall.
+func silentCloudSync(cfg *cloudauth.Config) {
+	// Pull cloud → local note store.
+	cloudNotes, pullErr := cloudauth.PullMemories(cfg)
+	if pullErr == nil && len(cloudNotes) > 0 {
+		ns := memory.NewNoteStore()
+		local := make([]memory.Note, 0, len(cloudNotes))
+		for _, n := range cloudNotes {
+			local = append(local, memory.Note{Key: n.Key, Content: n.Content, UpdatedAt: n.UpdatedAt})
+		}
+		_ = ns.Save(local)
+	}
+
+	// Push local notes → cloud (only notes not already in cloud).
+	cloudKeys := make(map[string]bool, len(cloudNotes))
+	for _, n := range cloudNotes {
+		cloudKeys[n.Key] = true
+	}
+
+	store, err := memory.NewStore()
+	if err != nil {
+		return
+	}
+	entries := store.Query(memory.QueryOptions{Limit: 200})
+	for _, e := range entries {
+		// Only push notes (_context) and data summaries that have content.
+		key := e.Connector + "." + e.Resource + "." + e.ID
+		if cloudKeys[key] {
+			continue
+		}
+		content := e.Summary
+		if content == "" {
+			continue
+		}
+		_ = cloudauth.PushMemory(key, content, e.Author, cfg)
+	}
 }

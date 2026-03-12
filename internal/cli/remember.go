@@ -46,7 +46,7 @@ Example:
 
 			// Best-effort cloud push with author.
 			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
-				key := connector + "._context"
+				key := connector + "._context." + id
 				if pushErr := cloudauth.PushMemory(key, note, author, cfg); pushErr != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] cloud sync failed for %s: %v\n", key, pushErr)
 				}

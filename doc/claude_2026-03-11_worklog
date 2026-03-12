@@ -1,0 +1,134 @@
+# Claude Worklog — 2026-03-11
+
+## 主题：定位重构 + Distribution + 叙事调整
+
+---
+
+## Session 1: Lighthouse + PageSpeed 修复
+
+### SEO 修复
+- `robots.txt` 语法清理：移除重复 `Allow: /` 和独立 AI 爬虫块（Lighthouse SEO 92→修复）
+- Footer heading hierarchy：`<h4>` → `<h3>`（Lighthouse Accessibility 94→修复）
+- `Content-Signal` 指令是 Cloudflare 平台注入，非代码问题
+
+### Performance 优化
+- PostHog 懒加载：`requestIdleCallback` 延迟加载 SDK（-138 KiB critical path）
+- 静态资源缓存：`_headers` 添加 `Cache-Control: immutable` for JS/CSS
+
+---
+
+## Session 2: SEO 外链
+
+- `README.md` 添加官网链接（Website）
+- `README.CN.md` 添加官网链接（官网）
+- `AGENTS.md` 添加 Website + GitHub 链接
+
+---
+
+## Session 3: Feature Card 叙事重构
+
+### 问题
+Landing page Features 卡片叙事从三支柱（Normalize/Curate/Govern）出发，太抽象。
+
+### 改动
+价值排序调整为：memory（获客）→ credentials（信任）→ schema retention（留存）
+
+| 卡片 | 旧叙事 | 新叙事 |
+|------|--------|--------|
+| 1 | Schema Learning | Cross-agent memory（不犯同样的错） |
+| 2 | Normalize（works with any API） | Credential isolation（agent 永远不碰 API 密钥） |
+| 3 | Govern（controls what agents see） | Schema learning（用得越久越聪明） |
+
+图标更新：`Database, Sparkles, Shield` → `Lock, Sparkles, TrendingUp`
+
+---
+
+## Session 4: 定位重构（"MCP server" → "agent middleware"）
+
+### 战略决策
+- **Identity**: Harbor = agent middleware（不是 "MCP server"）
+- **Compatibility**: MCP-native, but any function-calling agent works
+- **协议风险对冲**: MCP 赢 → middleware；协议碎片化 → 翻译层（Stripe 类比）
+- **Training signal**: proxy 位置的复利 — 所有 tool call 流经 Harbor，每次交互都是免费 training signal
+
+### 改动范围（13+ 处）
+- `layout.tsx` metadata description
+- `page.tsx` JSON-LD（SoftwareApplication + FAQ）
+- `llms.txt`（两个 repo）
+- `llms-full.txt`
+- GitHub repo description
+- `en.json` / `zh.json` features subtitle
+- `harbor/doc/roadmap` 定位 section
+
+---
+
+## Session 5: Roadmap + Worklog 更新
+
+- `harbor-cloud/doc/ROADMAP.md` — 添加定位 section + Distribution 完成项
+- `harbor-cloud/doc/claude_2026-03-11_worklog` — 新建
+- `harbor/doc/roadmap` — 定位 section 更新 + Phase 5D 完成项更新 + 优先级原则更新
+- `harbor/doc/claude_2026-03-11_worklog` — 新建（本文件）
+
+---
+
+## 修改文件（harbor repo）
+
+| # | 文件 | 操作 |
+|---|------|------|
+| 1 | `README.md` | 改（添加官网外链） |
+| 2 | `README.CN.md` | 改（添加官网外链） |
+| 3 | `AGENTS.md` | 改（添加 Website + GitHub 链接） |
+| 4 | `llms.txt` | 改（"MCP server" → "agent middleware"） |
+| 5 | `doc/roadmap` | 改（定位重构 + Phase 5D 更新 + 优先级原则） |
+| 6 | `doc/claude_2026-03-11_worklog` | 新建 |
+
+---
+
+## 关键洞察
+
+1. **Distribution > Features** — 当前瓶颈不是建什么，而是让 1000 个开发者安装 Harbor
+2. **半步策略** — 不是 memory（太远），是"agent experience"定位 + 时机（MCP 爆发期）
+3. **Training signal 复利** — Harbor 的 proxy 位置让每次 agent 交互都产生学习数据，schema learning 是第一个实现
+4. **协议对冲** — "agent middleware" 定位让 Harbor 在协议战中保持中立，无论谁赢都有位置
+
+---
+
+## Session 6: Cloud Memory Sync 修复 + 设备标识
+
+### 问题
+1. Cloud push 使用非唯一 key（`connector._context`），同一 connector 的多条 note 互相覆盖（PUT upsert 语义）
+2. `harbor recall` 只有 pull 没有 push，本地 memory 不会自动同步到 cloud
+3. Cloud memory 没有设备来源信息
+
+### 修复
+
+**Cloud push key 唯一化**（3 处）
+- `internal/cli/remember.go`: `connector + "._context"` → `connector + "._context." + id`
+- `internal/remember/remember.go`: 同上（MCP handler）
+- `internal/memory/store.go`: `obj.Connector + "." + obj.Resource` → `+ "." + obj.ID`
+
+**双向静默同步**（`internal/cli/recall.go`）
+- `recall` 执行前自动触发 `silentCloudSync(cfg)`
+- Pull: cloud → local note store
+- Push: local notes（未在 cloud 中的）→ cloud
+- 所有错误静默忽略，不阻塞 recall
+
+**设备标识**（`internal/cloudauth/memory.go`）
+- 新增 `DeviceID()` 函数（返回 hostname）
+- `PushMemory` author 字段追加 `@ hostname`（如 `"Claude Code @ Jiaxis-Macbook-Air-2013.local"`）
+
+### 结果
+- Cloud memory 从 4 条 → 28 条（首次 sync 后）
+- 每条 memory 带设备来源，支持跨设备追溯
+
+---
+
+## 修改文件（harbor repo，Session 6 追加）
+
+| # | 文件 | 操作 |
+|---|------|------|
+| 7 | `internal/cli/recall.go` | 改（双向静默 cloud sync） |
+| 8 | `internal/cli/remember.go` | 改（cloud push key 唯一化） |
+| 9 | `internal/remember/remember.go` | 改（cloud push key 唯一化） |
+| 10 | `internal/memory/store.go` | 改（cloud push key 唯一化） |
+| 11 | `internal/cloudauth/memory.go` | 改（DeviceID + author 追加 hostname） |

@@ -1,0 +1,27 @@
+{
+  "name": "harbor-marketplace",
+  "owner": {
+    "name": "oSEAItic",
+    "email": "hello@oseaitic.com"
+  },
+  "metadata": {
+    "description": "Official Harbor plugins — persistent cross-agent memory for AI agents",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "harbor",
+      "source": "./skills/harbor",
+      "description": "Persistent cross-agent memory, credential isolation, and schema learning. Adds Harbor MCP server + /harbor skill for setup, memory, and schema management.",
+      "version": "0.3.10",
+      "author": {
+        "name": "oSEAItic"
+      },
+      "homepage": "https://harbor.oseaitic.com",
+      "repository": "https://github.com/oSEAItic/harbor",
+      "license": "Apache-2.0",
+      "keywords": ["agent-memory", "mcp", "cross-agent", "schema-learning"],
+      "category": "developer-tools"
+    }
+  ]
+}

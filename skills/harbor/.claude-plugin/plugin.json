@@ -1,0 +1,29 @@
+{
+  "name": "harbor",
+  "description": "Persistent cross-agent memory, credential isolation, and schema learning for AI agents. Harbor sits between your agents and APIs — what one agent learns, every agent knows.",
+  "version": "0.3.10",
+  "author": {
+    "name": "oSEAItic",
+    "email": "hello@oseaitic.com"
+  },
+  "homepage": "https://harbor.oseaitic.com",
+  "repository": "https://github.com/oSEAItic/harbor",
+  "license": "Apache-2.0",
+  "keywords": [
+    "agent-memory",
+    "mcp",
+    "cross-agent",
+    "context-protocol",
+    "schema-learning",
+    "credential-isolation"
+  ],
+  "components": {
+    "skills": ["skills/harbor"]
+  },
+  "mcpServers": {
+    "harbor": {
+      "command": "harbor",
+      "args": ["mcp"]
+    }
+  }
+}

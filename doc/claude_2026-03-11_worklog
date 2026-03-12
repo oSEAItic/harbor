@@ -132,3 +132,55 @@ Landing page Features 卡片叙事从三支柱（Normalize/Curate/Govern）出�
 | 9 | `internal/remember/remember.go` | 改（cloud push key 唯一化） |
 | 10 | `internal/memory/store.go` | 改（cloud push key 唯一化） |
 | 11 | `internal/cloudauth/memory.go` | 改（DeviceID + author 追加 hostname） |
+
+---
+
+## Session 7: Cloud Memory 可见性 + Debug 工具
+
+### 问题
+1. 跨设备 memory（如 Tohsaka 写的 `mem_239f1db3`）push 到 cloud 后，其他设备 `recall --list` 看不到
+2. Cloud sync 完全静默，push 失败无从诊断
+3. 无法快速确认设备的 cloud 登录状态
+
+### 根因
+- `silentCloudSync` pull 时只存到 NoteStore（flat JSON cache），不写入主 memory store
+- 主 store 的 index 里没有 cloud-only 的条目，所以 recall 不显示
+- 所有 push 错误被 `_ =` 吞掉
+
+### 修复
+
+**`harbor whoami`**（新命令）
+- 显示 cloud endpoint、API key prefix、device hostname、login 时间
+- 快速诊断：设备是否登录、用的哪个账户
+
+**`harbor sync`**（新命令）
+- 显式双向 sync，带详细输出（push/pull 数量、失败原因）
+- 与 recall 里的静默 sync 逻辑一致，但可观测
+
+**Cloud-only memory 导入主 store**
+- `silentCloudSync` + `sync` 在 pull 后，解析 cloud key（`connector.resource.mem_id`）
+- 对本地不存在的 `mem_*` 条目，调用 `Store.ImportCloudNote()` 导入
+- 保留原始 ID、author、timestamp，不触发 cloud re-push（避免反馈循环）
+- `Store.ImportCloudNote()` + `Store.HasEntry()` 新增方法
+
+### 结果
+- Tohsaka 设备写的 `mem_239f1db3` 现在出现在本地 `recall --list`
+- Author 字段 `Rin (OpenClaw) @ 07073190f9c8` 自然区分来源设备
+- `harbor whoami` 确认 Tohsaka 登录状态 + device ID
+
+### 版本
+- v0.3.7: cloud memory sync 修复 + 设备标识
+- v0.3.8: `harbor whoami` + `harbor sync`
+- v0.3.9: cloud-only memory 导入主 store
+
+---
+
+## 修改文件（harbor repo，Session 7 追加）
+
+| # | 文件 | 操作 |
+|---|------|------|
+| 12 | `internal/cli/whoami.go` | 新建（`harbor whoami` 命令） |
+| 13 | `internal/cli/sync.go` | 新建（`harbor sync` 命令 + cloud import） |
+| 14 | `internal/cli/root.go` | 改（注册 whoami + sync） |
+| 15 | `internal/cli/recall.go` | 改（silentCloudSync 增加 cloud note import） |
+| 16 | `internal/memory/store.go` | 改（ImportCloudNote + HasEntry 方法） |

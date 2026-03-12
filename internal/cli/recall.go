@@ -133,27 +133,37 @@ func recallList(cmd *cobra.Command, store *memory.Store, since time.Duration) er
 		return nil
 	}
 
+	w := cmd.OutOrStdout()
+	fmt.Fprintf(w, "%d memories:\n\n", len(entries))
+
 	// Header
-	fmt.Fprintf(cmd.OutOrStdout(), "%-14s  %-25s  %-8s  %-6s  %s\n",
-		"ID", "Resource", "Age", "Fresh?", "Schema")
-	fmt.Fprintf(cmd.OutOrStdout(), "%-14s  %-25s  %-8s  %-6s  %s\n",
-		"--------------", "-------------------------", "--------", "------", "-------------------")
+	fmt.Fprintf(w, "%-14s  %-20s  %-6s  %-16s  %s\n",
+		"ID", "Resource", "Age", "Author", "Summary")
+	fmt.Fprintf(w, "%-14s  %-20s  %-6s  %-16s  %s\n",
+		"--------------", "--------------------", "------", "----------------", "-----------------------------")
 
 	for _, e := range entries {
 		age := time.Since(e.CreatedAt).Truncate(time.Second)
-		fresh := store.IsFresh(&e)
 
-		freshStr := "no"
-		if fresh {
-			freshStr = "yes"
+		// Clean up resource display: "general._context" → "general"
+		resource := e.Connector
+		if e.Resource != "" && e.Resource != "_context" {
+			resource = e.Connector + "." + e.Resource
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "%-14s  %-25s  %-8s  %-6s  %s\n",
+		author := shortAuthor(e.Author)
+
+		summary := e.Summary
+		if len(summary) > 40 {
+			summary = summary[:37] + "..."
+		}
+
+		fmt.Fprintf(w, "%-14s  %-20s  %-6s  %-16s  %s\n",
 			e.ID,
-			e.Connector+"."+e.Resource,
+			resource,
 			formatDuration(age),
-			freshStr,
-			e.Schema,
+			author,
+			summary,
 		)
 	}
 
@@ -172,30 +182,34 @@ func recallSearch(cmd *cobra.Command, store *memory.Store, query string, since t
 		return nil
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "%d memories matching %q:\n\n", len(results), query)
+	w := cmd.OutOrStdout()
+	fmt.Fprintf(w, "%d memories matching %q:\n\n", len(results), query)
 
 	// Header
-	fmt.Fprintf(cmd.OutOrStdout(), "%-14s  %-25s  %-8s  %-6s  %s\n",
-		"ID", "Resource", "Age", "Fresh?", "Summary")
-	fmt.Fprintf(cmd.OutOrStdout(), "%-14s  %-25s  %-8s  %-6s  %s\n",
-		"--------------", "-------------------------", "--------", "------", "-------------------")
+	fmt.Fprintf(w, "%-14s  %-20s  %-6s  %-16s  %s\n",
+		"ID", "Resource", "Age", "Author", "Summary")
+	fmt.Fprintf(w, "%-14s  %-20s  %-6s  %-16s  %s\n",
+		"--------------", "--------------------", "------", "----------------", "-----------------------------")
 
 	for _, r := range results {
-		freshStr := "no"
-		if r.Fresh {
-			freshStr = "yes"
+		// Clean up resource display: "general._context" → "general"
+		resource := r.Connector
+		if r.Resource != "" && r.Resource != "_context" {
+			resource = r.Connector + "." + r.Resource
 		}
+
+		author := shortAuthor(r.Author)
 
 		summary := r.Summary
-		if len(summary) > 60 {
-			summary = summary[:57] + "..."
+		if len(summary) > 40 {
+			summary = summary[:37] + "..."
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "%-14s  %-25s  %-8s  %-6s  %s\n",
+		fmt.Fprintf(w, "%-14s  %-20s  %-6s  %-16s  %s\n",
 			r.ID,
-			r.Connector+"."+r.Resource,
+			resource,
 			formatDuration(r.Age),
-			freshStr,
+			author,
 			summary,
 		)
 	}
@@ -206,6 +220,20 @@ func recallSearch(cmd *cobra.Command, store *memory.Store, query string, since t
 // parseDuration parses a human-friendly duration string (supports h, m, s suffixes).
 func parseDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
+}
+
+// shortAuthor extracts the name part from author strings like "Claude Code @ hostname".
+func shortAuthor(author string) string {
+	if author == "" {
+		return "-"
+	}
+	if i := strings.Index(author, " @ "); i > 0 {
+		author = author[:i]
+	}
+	if len(author) > 16 {
+		author = author[:13] + "..."
+	}
+	return author
 }
 
 // formatDuration returns a human-friendly short duration string.

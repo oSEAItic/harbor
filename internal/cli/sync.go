@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/oseaitic/harbor/internal/cloudauth"
 	"github.com/oseaitic/harbor/internal/memory"
@@ -50,16 +51,35 @@ Examples:
 				}
 			}
 
+			store, err := memory.NewStore()
+			if err != nil {
+				return fmt.Errorf("opening memory store: %w", err)
+			}
+
+			// ── Import cloud-only notes into main store ──────────
+			imported := 0
+			for _, n := range cloudNotes {
+				parts := strings.SplitN(n.Key, ".", 3)
+				if len(parts) < 3 || !strings.HasPrefix(parts[2], "mem_") {
+					continue
+				}
+				connector, resource, id := parts[0], parts[1], parts[2]
+				if store.HasEntry(id) {
+					continue
+				}
+				if store.ImportCloudNote(id, connector, resource, n.Content, n.Author, n.UpdatedAt) {
+					imported++
+				}
+			}
+			if imported > 0 {
+				fmt.Fprintf(w, "  ✓ imported %d cloud-only note(s) to local store\n", imported)
+			}
+
 			// ── Push: local → cloud ─────────────────────────────
 			fmt.Fprintln(w, "Pushing local memories to cloud...")
 			cloudKeys := make(map[string]bool, len(cloudNotes))
 			for _, n := range cloudNotes {
 				cloudKeys[n.Key] = true
-			}
-
-			store, err := memory.NewStore()
-			if err != nil {
-				return fmt.Errorf("opening memory store: %w", err)
 			}
 
 			entries := store.Query(memory.QueryOptions{Limit: 200})

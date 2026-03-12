@@ -56,15 +56,29 @@ Claude Code 分析你的加密货币持仓。关掉会话。之后另一个 Agen
 
 ## 快速开始
 
-### 安装
+**三种安装方式，任选其一：**
+
+**1. 一行安装：**
 
 ```bash
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
-> 为当前平台（Linux/macOS、amd64/arm64）下载预编译 binary。无需任何运行时。
+**2. Agent Skill / Plugin**（Claude Code、Codex、Copilot、Cursor、Gemini CLI）：
 
-或从源码安装：`go install github.com/oseaitic/harbor/cmd/harbor@latest`
+```bash
+claude plugin marketplace add oSEAItic/harbor && claude plugin install harbor@harbor-marketplace
+```
+
+或者任何支持 [Agent Skills](https://agentskills.io) 的 agent —— 本 repo 的 `skills/harbor/SKILL.md` 会被自动索引。
+
+**3. 粘贴到你的 Agent**（零安装 —— Agent 全自动完成）：
+
+```
+Read github.com/oSEAItic/harbor and set up Harbor for me.
+```
+
+Agent 读取 [AGENTS.md](AGENTS.md)，自动安装 Harbor、配置 MCP、开始使用。
 
 ### 试一试
 
@@ -73,7 +87,8 @@ harbor install coingecko
 harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 ```
 
-### 添加到 Claude Code / Cursor / Gemini
+<details>
+<summary>手动 MCP 配置</summary>
 
 ```json
 {
@@ -86,7 +101,7 @@ harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 }
 ```
 
-Agent 立刻获得对所有已安装连接器的结构化访问，内置 Schema 学习、记忆和检索。
+</details>
 
 ### 代理任何现有 MCP 服务器
 

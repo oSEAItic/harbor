@@ -56,14 +56,23 @@ Every agent on your machine shares the same memory layer. When one agent saves a
 
 ## Quick Start
 
+**Three ways to install — pick whichever fits:**
+
+**1. One-line install:**
+
 ```bash
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
-> Pre-compiled binary for Linux/macOS (amd64/arm64). No runtime required.
-> Or from source: `go install github.com/oseaitic/harbor/cmd/harbor@latest`
+**2. Agent Skill / Plugin** (Claude Code, Codex, Copilot, Cursor, Gemini CLI):
 
-**Or — paste this into your agent** (Claude Code, Cursor, Gemini, any MCP client):
+```bash
+claude plugin marketplace add oSEAItic/harbor && claude plugin install harbor@harbor-marketplace
+```
+
+Or for any agent that supports [Agent Skills](https://agentskills.io) — the `skills/harbor/SKILL.md` in this repo is auto-indexed.
+
+**3. Paste into your agent** (zero install — agent does everything):
 
 ```
 Read github.com/oSEAItic/harbor and set up Harbor for me.

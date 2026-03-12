@@ -196,6 +196,59 @@ func (s *Store) SaveNote(connector, note, author string) (string, error) {
 	return s.Save(obj)
 }
 
+// ImportCloudNote saves a note that originated from cloud sync.
+// Unlike SaveNote, it preserves the original ID and timestamp, and skips cloud re-push.
+// Returns true if the note was imported (false if it already exists locally).
+func (s *Store) ImportCloudNote(id, connector, resource, content, author string, createdAt time.Time) bool {
+	// Skip if already exists locally.
+	path := filepath.Join(s.objDir, id+".json")
+	if _, err := os.Stat(path); err == nil {
+		return false
+	}
+
+	obj := &Object{
+		ID:         id,
+		Connector:  connector,
+		Resource:   resource,
+		Schema:     SchemaNote,
+		TTLSeconds: 0,
+		Author:     author,
+		CreatedAt:  createdAt,
+		Layers:     Layers{Summary: content},
+	}
+
+	data, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return false
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	idx := loadIndex(s.dir)
+	idx.Entries = append(idx.Entries, IndexEntry{
+		ID:        id,
+		Connector: connector,
+		Resource:  resource,
+		Schema:    SchemaNote,
+		CreatedAt: createdAt,
+		Summary:   content,
+		Author:    author,
+	})
+	_ = saveIndex(s.dir, idx)
+	return true
+}
+
+// HasEntry returns true if an entry with the given ID exists in the index.
+func (s *Store) HasEntry(id string) bool {
+	path := filepath.Join(s.objDir, id+".json")
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // Get loads a full memory object by ID.
 func (s *Store) Get(id string) (*Object, error) {
 	path := filepath.Join(s.objDir, id+".json")

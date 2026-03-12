@@ -228,12 +228,21 @@ func formatDuration(d time.Duration) string {
 }
 
 // silentCloudSync performs bidirectional memory sync with Harbor Cloud.
-// Push: local notes not yet in cloud. Pull: cloud notes not yet local.
+// Pull: import cloud-only notes into local store. Push: upload local-only notes.
 // All errors are silently ignored — this must never block recall.
 func silentCloudSync(cfg *cloudauth.Config) {
-	// Pull cloud → local note store.
 	cloudNotes, pullErr := cloudauth.PullMemories(cfg)
-	if pullErr == nil && len(cloudNotes) > 0 {
+	if pullErr != nil {
+		return
+	}
+
+	store, err := memory.NewStore()
+	if err != nil {
+		return
+	}
+
+	// Save to NoteStore (flat cache for context injection).
+	if len(cloudNotes) > 0 {
 		ns := memory.NewNoteStore()
 		local := make([]memory.Note, 0, len(cloudNotes))
 		for _, n := range cloudNotes {
@@ -242,19 +251,27 @@ func silentCloudSync(cfg *cloudauth.Config) {
 		_ = ns.Save(local)
 	}
 
+	// Import cloud-only notes into main store so they appear in recall --list.
+	for _, n := range cloudNotes {
+		parts := strings.SplitN(n.Key, ".", 3)
+		if len(parts) < 3 || !strings.HasPrefix(parts[2], "mem_") {
+			continue // skip old-format keys without mem_id
+		}
+		connector, resource, id := parts[0], parts[1], parts[2]
+		if store.HasEntry(id) {
+			continue
+		}
+		store.ImportCloudNote(id, connector, resource, n.Content, n.Author, n.UpdatedAt)
+	}
+
 	// Push local notes → cloud (only notes not already in cloud).
 	cloudKeys := make(map[string]bool, len(cloudNotes))
 	for _, n := range cloudNotes {
 		cloudKeys[n.Key] = true
 	}
 
-	store, err := memory.NewStore()
-	if err != nil {
-		return
-	}
 	entries := store.Query(memory.QueryOptions{Limit: 200})
 	for _, e := range entries {
-		// Only push notes (_context) and data summaries that have content.
 		key := e.Connector + "." + e.Resource + "." + e.ID
 		if cloudKeys[key] {
 			continue

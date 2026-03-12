@@ -58,6 +58,8 @@ Workflow:
 		newRegisterCmd(),
 		newLoginCmd(),
 		newLogoutCmd(),
+		newWhoamiCmd(),
+		newSyncCmd(),
 	)
 
 	// ── Develop ──────────────────────────────────────────────────

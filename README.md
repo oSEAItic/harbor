@@ -75,7 +75,7 @@ Or for any agent that supports [Agent Skills](https://agentskills.io) — the `s
 **3. Paste into your agent** (zero install — agent does everything):
 
 ```
-Read github.com/oSEAItic/harbor and set up Harbor for me.
+Set up Harbor for this project — instructions at github.com/oSEAItic/harbor/blob/main/AGENTS.md
 ```
 
 The agent reads [AGENTS.md](AGENTS.md), installs Harbor, configures MCP, and starts using it — no manual setup needed.

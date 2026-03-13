@@ -75,7 +75,7 @@ claude plugin marketplace add oSEAItic/harbor && claude plugin install harbor@ha
 **3. 粘贴到你的 Agent**（零安装 —— Agent 全自动完成）：
 
 ```
-Read github.com/oSEAItic/harbor and set up Harbor for me.
+Set up Harbor for this project — instructions at github.com/oSEAItic/harbor/blob/main/AGENTS.md
 ```
 
 Agent 读取 [AGENTS.md](AGENTS.md)，自动安装 Harbor、配置 MCP、开始使用。

@@ -13,7 +13,7 @@
       "name": "harbor",
       "source": "./skills/harbor",
       "description": "Persistent cross-agent memory, credential isolation, and schema learning. Adds Harbor MCP server + /harbor skill for setup, memory, and schema management.",
-      "version": "0.3.10",
+      "version": "0.3.13",
       "author": {
         "name": "oSEAItic"
       },

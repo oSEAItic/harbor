@@ -1,7 +1,7 @@
 {
   "name": "harbor",
   "description": "Persistent cross-agent memory, credential isolation, and schema learning for AI agents. Harbor sits between your agents and APIs — what one agent learns, every agent knows.",
-  "version": "0.3.10",
+  "version": "0.3.13",
   "author": {
     "name": "oSEAItic",
     "email": "hello@oseaitic.com"

@@ -62,7 +62,7 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 					resp.Meta.Recalls = buildRecalls(store, connectorName, obj.ID)
 					memory.RecordCall(store.Dir(), connectorName)
 					if resp.Meta.Context == nil {
-						resp.Meta.MemoryHint = "When you finish analyzing this connector's data, call harbor_remember with a comprehensive note: what you found, patterns observed, and your conclusions. This becomes your persistent context — shown at the start of every future session with this connector."
+						resp.Meta.MemoryHint = "When you finish analyzing this data, call harbor_remember with a specific topic and your conclusions. Use descriptive topics like 'websocket-bugs' or 'billing-logic' — not the connector name. Add --connector to scope it. This becomes your persistent context for future sessions."
 					}
 					return &Result{
 						Response: resp,
@@ -226,22 +226,49 @@ func ParseConnectorResource(arg string) (connectorName, resource string, err err
 	return parts[0], parts[1], nil
 }
 
-// buildContext returns the latest connector-level note (harbor.note.v1) for the
-// given connector, or nil if none exists. This is the agent's persistent
-// understanding of the connector's data source — shown on every access.
+// buildContext returns the most recent notes (harbor.note.v1) for the given
+// connector across all topics, or nil if none exist. This is the agent's
+// persistent understanding of the connector's data source — shown on every access.
 func buildContext(store *memory.Store, connectorName string) *protocol.ContextRef {
+	// Pull notes for this connector (any topic), newest first.
 	results := store.Query(memory.QueryOptions{
 		Connector: connectorName,
-		Resource:  "_context",
-		Limit:     1,
+		Limit:     10,
 	})
-	if len(results) == 0 {
+
+	// Filter to notes only.
+	var notes []memory.IndexEntry
+	for _, e := range results {
+		if e.Schema == memory.SchemaNote {
+			notes = append(notes, e)
+		}
+	}
+	if len(notes) == 0 {
 		return nil
 	}
+
+	// Single note: return as-is.
+	if len(notes) == 1 {
+		return &protocol.ContextRef{
+			Summary: notes[0].Summary,
+			Age:     formatMemoryAge(notes[0].CreatedAt),
+			Author:  notes[0].Author,
+		}
+	}
+
+	// Multiple notes: format with topic labels.
+	var parts []string
+	for _, n := range notes {
+		topic := n.Resource
+		if topic == "_context" {
+			topic = "general"
+		}
+		parts = append(parts, fmt.Sprintf("[%s] %s", topic, n.Summary))
+	}
 	return &protocol.ContextRef{
-		Summary: results[0].Summary,
-		Age:     formatMemoryAge(results[0].CreatedAt),
-		Author:  results[0].Author,
+		Summary: strings.Join(parts, "\n"),
+		Age:     formatMemoryAge(notes[0].CreatedAt),
+		Author:  notes[0].Author,
 	}
 }
 

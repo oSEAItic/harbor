@@ -11,15 +11,17 @@ import (
 
 func newRememberCmd() *cobra.Command {
 	var author string
+	var conn string
 	var refs []string
 
 	cmd := &cobra.Command{
-		Use:   "remember <connector> <note>",
-		Short: "Save analysis conclusions about a connector for future sessions",
-		Long: `Save your analysis conclusions about a connector to Harbor memory.
+		Use:   "remember <topic> <note>",
+		Short: "Save analysis conclusions by topic for future sessions",
+		Long: `Save your analysis conclusions to Harbor memory, organized by topic.
 
-Your note will appear as 'context' the next time any agent accesses this
-connector — across sessions, devices, and agents.
+Notes are organized by topic (e.g. "websocket-bugs", "billing-logic") and
+optionally scoped to a connector. This will appear as 'context' in future
+sessions — across sessions, devices, and agents.
 
 Before writing, consider summarising:
   - What you analyzed and why
@@ -28,11 +30,12 @@ Before writing, consider summarising:
   - Recommendations you made
 
 Example:
-  harbor remember coingecko "BTC dominance rising. SOL underperforming."
-  harbor remember --author "Claude Code" coingecko "Market analysis..."`,
+  harbor remember market-trends "BTC dominance rising. SOL underperforming."
+  harbor remember --connector kuse-hive ws-reconnect "Root cause is stale token..."
+  harbor remember --author "Claude Code" billing "Token amount always 1..."`,
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			connector := args[0]
+			topic := args[0]
 			note := strings.Join(args[1:], " ")
 
 			store, err := memory.NewStore()
@@ -40,7 +43,7 @@ Example:
 				return fmt.Errorf("opening memory store: %w", err)
 			}
 
-			id, err := store.SaveNote(connector, note, author)
+			id, err := store.SaveNote(conn, topic, note, author)
 			if err != nil {
 				return fmt.Errorf("saving note: %w", err)
 			}
@@ -52,21 +55,26 @@ Example:
 
 			// Best-effort cloud push with author.
 			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
-				key := connector + "._context." + id
+				key := conn + "." + topic + "." + id
 				if pushErr := cloudauth.PushMemory(key, note, author, cfg); pushErr != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] cloud sync failed for %s: %v\n", key, pushErr)
 				}
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Saved note for %q (%s)\n", connector, id)
+			label := fmt.Sprintf("topic=%q", topic)
+			if conn != "" {
+				label += fmt.Sprintf(" connector=%q", conn)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Saved note (%s, %s)\n", label, id)
 			if len(refs) > 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "References: %s\n", strings.Join(refs, ", "))
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "This will appear as context in future sessions with this connector.\n")
+			fmt.Fprintf(cmd.OutOrStdout(), "This will appear as context in future sessions.\n")
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&author, "author", "", "Agent/model name (e.g. 'Claude Code', 'Gemini')")
+	cmd.Flags().StringVar(&conn, "connector", "", "Scope note to a specific connector (optional)")
 	cmd.Flags().StringSliceVar(&refs, "refs", nil, "Memory IDs this note references (comma-separated)")
 	return cmd
 }

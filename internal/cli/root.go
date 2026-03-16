@@ -51,6 +51,7 @@ Workflow:
 		newGetCmd(outputFormat),
 		newFetchCmd(),
 		newRememberCmd(),
+		newForgetCmd(),
 		newListCmd(),
 		newInstallCmd(),
 		newMCPCmd(version),

@@ -17,27 +17,29 @@ import (
 func ToolDefinition() mcp.Tool {
 	return mcp.NewToolWithRawSchema(
 		"harbor_remember",
-		"Persist your analysis conclusions about a connector for future sessions. "+
-			"Call this after completing meaningful analysis of a data source. "+
-			"Your note will appear as 'context' at the start of every future session with this connector — "+
-			"so you or any other agent won't need to re-derive the same insights. "+
-			"IMPORTANT: Always pass your name in the 'author' field (e.g. 'Claude Code', 'Gemini', 'Cursor', 'GPT-4'). "+
-			"This lets the next agent know who produced the analysis. "+
-			"Before calling, compose a comprehensive summary covering: "+
-			"(1) what you analyzed and why, "+
-			"(2) patterns or anomalies found, "+
-			"(3) conclusions reached, "+
-			"(4) recommendations made.",
+		"Persist your analysis conclusions organized by topic for future sessions. "+
+			"Notes are organized by topic (e.g. 'websocket-reconnect', 'billing-logic', 'market-trends') "+
+			"and optionally scoped to a connector. "+
+			"IMPORTANT: Use specific, descriptive topics — NOT the connector name. One insight per topic. "+
+			"If you have multiple findings from one investigation, call this multiple times with different topics "+
+			"and the SAME session_id to group them (e.g. session_id='kuse-debug-20260316'). "+
+			"Harbor auto-links notes in the same session so future agents can pull the whole investigation. "+
+			"Always pass your name in 'author'. "+
+			"Before calling, summarize: (1) what you analyzed, (2) patterns found, (3) conclusions, (4) recommendations.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
-				"connector": {
+				"topic": {
 					"type": "string",
-					"description": "The connector name (e.g. 'kuse-hive', 'coingecko')"
+					"description": "Topic label for this note (e.g. 'websocket-reconnect', 'billing-logic', 'market-trends'). Use specific, descriptive names — NOT the connector name."
 				},
 				"note": {
 					"type": "string",
-					"description": "Your comprehensive analysis summary for this connector's data source"
+					"description": "Your comprehensive analysis summary"
+				},
+				"connector": {
+					"type": "string",
+					"description": "Optional: scope this note to a specific connector (e.g. 'kuse-hive', 'coingecko'). Omit for global notes."
 				},
 				"author": {
 					"type": "string",
@@ -47,9 +49,13 @@ func ToolDefinition() mcp.Tool {
 					"type": "array",
 					"items": { "type": "string" },
 					"description": "Memory IDs this note references or builds upon (e.g. ['mem_abc123']). Creates graph edges for dependency tracking."
+				},
+				"session_id": {
+					"type": "string",
+					"description": "Optional session ID to group related notes from the same investigation. Pass the same session_id across multiple harbor_remember calls to link them. If omitted, auto-generated from process context."
 				}
 			},
-			"required": ["connector", "note"]
+			"required": ["topic", "note"]
 		}`),
 	)
 }
@@ -61,12 +67,14 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("memory store not available"), nil
 		}
 
-		connector := req.GetString("connector", "")
+		topic := req.GetString("topic", "")
 		note := req.GetString("note", "")
+		connector := req.GetString("connector", "")
 		author := req.GetString("author", "")
+		sessionID := req.GetString("session_id", "")
 
-		if connector == "" {
-			return mcp.NewToolResultError("connector is required"), nil
+		if topic == "" {
+			return mcp.NewToolResultError("topic is required"), nil
 		}
 		if note == "" {
 			return mcp.NewToolResultError("note is required"), nil
@@ -79,7 +87,7 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 		// Parse optional refs (memory IDs this note references).
 		refs := parseRefs(req)
 
-		id, err := store.SaveNote(connector, note, author)
+		id, err := store.SaveNoteWithSession(connector, topic, note, author, sessionID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to save note: %v", err)), nil
 		}
@@ -92,19 +100,22 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 		// Best-effort cloud push — sync note to cloud for cross-device recall.
 		go func() {
 			if cfg, err := cloudauth.Load(); err == nil {
-				key := connector + "._context." + id
+				key := connector + "." + topic + "." + id
 				_ = cloudauth.PushMemory(key, note, author, cfg)
 			}
 		}()
 
-		msg := fmt.Sprintf("Saved note for %q (%s).", connector, id)
+		msg := fmt.Sprintf("Saved note topic=%q (%s).", topic, id)
+		if connector != "" {
+			msg += fmt.Sprintf(" Connector: %s.", connector)
+		}
 		if author != "" {
 			msg += fmt.Sprintf(" Author: %s.", author)
 		}
 		if len(refs) > 0 {
 			msg += fmt.Sprintf(" References: %s.", strings.Join(refs, ", "))
 		}
-		msg += " This will appear as context in future sessions with this connector."
+		msg += " This will appear as context in future sessions."
 
 		return mcp.NewToolResultText(msg), nil
 	}

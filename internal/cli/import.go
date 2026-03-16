@@ -46,7 +46,7 @@ Examples:
 				connector = "shared"
 			}
 
-			id, err := store.SaveNote(connector, shared.Content, shared.Author)
+			id, err := store.SaveNote(connector, "_context", shared.Content, shared.Author)
 			if err != nil {
 				return fmt.Errorf("saving imported memory: %w", err)
 			}

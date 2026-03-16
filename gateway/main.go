@@ -210,6 +210,7 @@ func main() {
 
 		var req struct {
 			Connector string `json:"connector"`
+			Topic     string `json:"topic"`
 			Note      string `json:"note"`
 			Author    string `json:"author"`
 		}
@@ -217,9 +218,12 @@ func main() {
 			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 			return
 		}
-		if req.Connector == "" || req.Note == "" {
-			http.Error(w, `{"error":"connector and note are required"}`, http.StatusBadRequest)
+		if req.Note == "" {
+			http.Error(w, `{"error":"note is required"}`, http.StatusBadRequest)
 			return
+		}
+		if req.Topic == "" {
+			req.Topic = "_context" // backward compat
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -230,7 +234,7 @@ func main() {
 			return
 		}
 
-		id, err := memStore.SaveNote(req.Connector, req.Note, req.Author)
+		id, err := memStore.SaveNote(req.Connector, req.Topic, req.Note, req.Author)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("save failed: %v", err)})

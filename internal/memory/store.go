@@ -135,6 +135,7 @@ func (s *Store) Save(obj *Object) (string, error) {
 		BytesCompact: obj.Meta.BytesCompact,
 		Summary:      obj.Layers.Summary,
 		Author:       obj.Author,
+		SessionID:    obj.SessionID,
 	})
 
 	// Note soft versioning: keep only the most recent maxNoteVersions per connector.
@@ -183,20 +184,76 @@ func (s *Store) Save(obj *Object) (string, error) {
 	return obj.ID, nil
 }
 
-// SaveNote persists a connector-level analysis note written by an agent via harbor_remember.
-// Notes use Resource="_context" and SchemaNote to distinguish them from data fetch objects.
-// Multiple notes for the same connector accumulate (no deduplication).
+// SaveNote persists a topic-based analysis note written by an agent via harbor_remember.
+// Notes use SchemaNote and are organized by topic (stored in Resource field).
+// The connector is optional — when empty, the note is global.
+// Multiple notes for the same connector+topic accumulate (no deduplication).
+// sessionID is optional — if empty, auto-generated from PID+date for grouping.
 // The optional author field records which agent wrote the note (e.g. "Claude Code", "Gemini").
-func (s *Store) SaveNote(connector, note, author string) (string, error) {
+func (s *Store) SaveNote(connector, topic, note, author string) (string, error) {
+	return s.SaveNoteWithSession(connector, topic, note, author, "")
+}
+
+// SaveNoteWithSession is like SaveNote but accepts an explicit session ID.
+// If sessionID is empty, one is auto-generated from PID + current date.
+func (s *Store) SaveNoteWithSession(connector, topic, note, author, sessionID string) (string, error) {
+	if topic == "" {
+		topic = "_context" // backward compat: no topic = legacy _context
+	}
+	if sessionID == "" {
+		sessionID = defaultSessionID()
+	}
 	obj := &Object{
 		Connector:  connector,
-		Resource:   "_context",
+		Resource:   topic,
 		Schema:     SchemaNote,
 		TTLSeconds: 0, // notes never expire
 		Author:     author,
+		SessionID:  sessionID,
 		Layers:     Layers{Summary: note},
 	}
-	return s.Save(obj)
+	id, err := s.Save(obj)
+	if err != nil {
+		return "", err
+	}
+
+	// Auto-refs: link to other notes in the same session.
+	s.autoLinkSession(id, sessionID)
+
+	return id, nil
+}
+
+// defaultSessionID generates a stable session ID from PID + today's date.
+// Same process on the same day = same session.
+func defaultSessionID() string {
+	pid := os.Getpid()
+	day := time.Now().UTC().Format("2006-01-02")
+	raw := fmt.Sprintf("ses_%d_%s", pid, day)
+	h := sha256.Sum256([]byte(raw))
+	return "ses_" + hex.EncodeToString(h[:])[:8]
+}
+
+// autoLinkSession finds other notes with the same sessionID and creates
+// bidirectional ref edges between the new note and existing session notes.
+func (s *Store) autoLinkSession(newID, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	idx := loadIndex(s.dir)
+	var siblings []string
+	for _, e := range idx.Entries {
+		if e.SessionID == sessionID && e.Schema == SchemaNote && e.ID != newID {
+			siblings = append(siblings, e.ID)
+		}
+	}
+	if len(siblings) == 0 {
+		return
+	}
+	// Link new note → all siblings, and each sibling → new note.
+	AddRefEdges(s.dir, newID, siblings)
+	for _, sib := range siblings {
+		AddRefEdges(s.dir, sib, []string{newID})
+	}
 }
 
 // ImportCloudNote saves a note that originated from cloud sync.
@@ -314,6 +371,9 @@ func (s *Store) Query(opts QueryOptions) []IndexEntry {
 		if opts.Resource != "" && e.Resource != opts.Resource {
 			continue
 		}
+		if opts.SessionID != "" && e.SessionID != opts.SessionID {
+			continue
+		}
 		if opts.Since > 0 && time.Since(e.CreatedAt) > opts.Since {
 			continue
 		}
@@ -342,6 +402,64 @@ func (s *Store) IsFresh(entry *IndexEntry) bool {
 	}
 	ttl := time.Duration(entry.TTLSeconds) * time.Second
 	return time.Since(entry.CreatedAt) <= ttl
+}
+
+// Delete removes a memory entry by ID. If trash is true, the object file is
+// moved to a trash/ subdirectory (recoverable for 7 days) instead of being
+// permanently deleted. Returns the deleted entry for confirmation display.
+func (s *Store) Delete(id string, trash bool) (*IndexEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	idx := loadIndex(s.dir)
+
+	// Find the entry.
+	var found *IndexEntry
+	filtered := idx.Entries[:0]
+	for _, e := range idx.Entries {
+		if e.ID == id {
+			copy := e
+			found = &copy
+		} else {
+			filtered = append(filtered, e)
+		}
+	}
+	if found == nil {
+		return nil, fmt.Errorf("memory %q not found", id)
+	}
+	idx.Entries = filtered
+
+	objPath := filepath.Join(s.objDir, id+".json")
+	if trash {
+		trashDir := filepath.Join(s.dir, "trash")
+		os.MkdirAll(trashDir, 0o755)
+		trashPath := filepath.Join(trashDir, id+".json")
+		os.Rename(objPath, trashPath)
+	} else {
+		os.Remove(objPath)
+	}
+
+	if err := saveIndex(s.dir, idx); err != nil {
+		return found, err
+	}
+	return found, nil
+}
+
+// DeleteByQuery removes all entries matching the query. Returns deleted entries.
+func (s *Store) DeleteByQuery(opts QueryOptions, trash bool) ([]IndexEntry, error) {
+	// First find matching entries (without lock — Query acquires its own).
+	matches := s.Query(opts)
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	var deleted []IndexEntry
+	for _, e := range matches {
+		if entry, err := s.Delete(e.ID, trash); err == nil && entry != nil {
+			deleted = append(deleted, *entry)
+		}
+	}
+	return deleted, nil
 }
 
 // Prune removes entries older than maxAge. Returns the count of pruned entries.

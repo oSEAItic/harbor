@@ -25,6 +25,7 @@ type Object struct {
 	CreatedAt  time.Time         `json:"created_at"`
 	TTLSeconds int               `json:"ttl_seconds"`
 	Author     string            `json:"author,omitempty"`
+	SessionID  string            `json:"session_id,omitempty"`
 	Refs       []string          `json:"refs,omitempty"`
 	Layers     Layers            `json:"layers"`
 	Meta       ObjectMeta        `json:"meta"`
@@ -61,6 +62,7 @@ type IndexEntry struct {
 	BytesCompact int               `json:"bytes_compact"`
 	Summary      string            `json:"summary,omitempty"`
 	Author       string            `json:"author,omitempty"`
+	SessionID    string            `json:"session_id,omitempty"`
 }
 
 // SearchResult is a memory entry with a relevance score for search results.
@@ -82,6 +84,7 @@ type Index struct {
 type QueryOptions struct {
 	Connector string
 	Resource  string
+	SessionID string
 	Params    map[string]string
 	Since     time.Duration
 	Limit     int

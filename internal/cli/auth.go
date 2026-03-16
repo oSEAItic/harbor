@@ -50,6 +50,7 @@ Examples:
 
 	cmd.Flags().Bool("local", false, "Force store in local OS keychain instead of cloud")
 
+	cmd.AddCommand(newAuthListCmd())
 	cmd.AddCommand(newAuthSyncCmd())
 	cmd.AddCommand(newAuthStatusCmd())
 	cmd.AddCommand(newAuthDeleteCmd())
@@ -110,6 +111,18 @@ func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Credential stored in OS keychain for %s.\n", connector)
 	return nil
+}
+
+// newAuthListCmd returns the 'harbor auth list' subcommand.
+func newAuthListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all stored credentials (local keychain + cloud)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return authList(cmd)
+		},
+	}
 }
 
 // newAuthSyncCmd returns the 'harbor auth sync [connector]' subcommand.

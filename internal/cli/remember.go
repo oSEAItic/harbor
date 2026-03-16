@@ -11,6 +11,7 @@ import (
 
 func newRememberCmd() *cobra.Command {
 	var author string
+	var refs []string
 
 	cmd := &cobra.Command{
 		Use:   "remember <connector> <note>",
@@ -44,6 +45,11 @@ Example:
 				return fmt.Errorf("saving note: %w", err)
 			}
 
+			// Record reference edges in the knowledge graph.
+			if len(refs) > 0 {
+				memory.AddRefEdges(store.Dir(), id, refs)
+			}
+
 			// Best-effort cloud push with author.
 			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
 				key := connector + "._context." + id
@@ -53,10 +59,14 @@ Example:
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Saved note for %q (%s)\n", connector, id)
+			if len(refs) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "References: %s\n", strings.Join(refs, ", "))
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "This will appear as context in future sessions with this connector.\n")
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&author, "author", "", "Agent/model name (e.g. 'Claude Code', 'Gemini')")
+	cmd.Flags().StringSliceVar(&refs, "refs", nil, "Memory IDs this note references (comma-separated)")
 	return cmd
 }

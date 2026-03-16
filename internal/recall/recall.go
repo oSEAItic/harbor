@@ -101,6 +101,25 @@ func handleRetrieve(store *memory.Store, id, layer string) (*mcp.CallToolResult,
 		return mcp.NewToolResultError(fmt.Sprintf("memory %q has no content", id)), nil
 	}
 
+	// Append 1-hop reference neighbors from the knowledge graph.
+	neighbors := memory.RefNeighbors(store.Dir(), id, 3)
+	if len(neighbors) > 0 {
+		content += "\n\n--- Referenced memories ---"
+		for _, nID := range neighbors {
+			nObj, err := store.Get(nID)
+			if err != nil {
+				content += fmt.Sprintf("\n- %s (not found)", nID)
+				continue
+			}
+			summary := nObj.Layers.Summary
+			if summary == "" {
+				summary = truncate(string(nObj.Layers.Compact), 120)
+			}
+			age := formatAge(time.Since(nObj.CreatedAt))
+			content += fmt.Sprintf("\n- %s (%s, %s): %s", nID, nObj.Connector, age, summary)
+		}
+	}
+
 	return mcp.NewToolResultText(content), nil
 }
 
@@ -185,6 +204,13 @@ func freshLabel(fresh bool) string {
 		return "fresh"
 	}
 	return "stale"
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "…"
 }
 
 func formatParams(params map[string]string) string {

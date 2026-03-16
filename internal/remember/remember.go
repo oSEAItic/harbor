@@ -42,6 +42,11 @@ func ToolDefinition() mcp.Tool {
 				"author": {
 					"type": "string",
 					"description": "Your agent/model name (e.g. 'Claude Code', 'Gemini', 'Cursor'). If omitted, Harbor auto-detects from environment."
+				},
+				"refs": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "Memory IDs this note references or builds upon (e.g. ['mem_abc123']). Creates graph edges for dependency tracking."
 				}
 			},
 			"required": ["connector", "note"]
@@ -71,9 +76,17 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 			author = detectAgent()
 		}
 
+		// Parse optional refs (memory IDs this note references).
+		refs := parseRefs(req)
+
 		id, err := store.SaveNote(connector, note, author)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to save note: %v", err)), nil
+		}
+
+		// Record reference edges in the knowledge graph.
+		if len(refs) > 0 {
+			memory.AddRefEdges(store.Dir(), id, refs)
 		}
 
 		// Best-effort cloud push — sync note to cloud for cross-device recall.
@@ -88,10 +101,37 @@ func MakeHandler(store *memory.Store) server.ToolHandlerFunc {
 		if author != "" {
 			msg += fmt.Sprintf(" Author: %s.", author)
 		}
+		if len(refs) > 0 {
+			msg += fmt.Sprintf(" References: %s.", strings.Join(refs, ", "))
+		}
 		msg += " This will appear as context in future sessions with this connector."
 
 		return mcp.NewToolResultText(msg), nil
 	}
+}
+
+// parseRefs extracts the refs array from an MCP request.
+// MCP passes JSON arrays as []interface{}, so we convert each element to string.
+func parseRefs(req mcp.CallToolRequest) []string {
+	args := req.GetArguments()
+	if args == nil {
+		return nil
+	}
+	raw, ok := args["refs"]
+	if !ok || raw == nil {
+		return nil
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	var refs []string
+	for _, v := range arr {
+		if s, ok := v.(string); ok && s != "" {
+			refs = append(refs, s)
+		}
+	}
+	return refs
 }
 
 // detectAgent attempts to identify the calling agent from environment variables.

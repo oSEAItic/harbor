@@ -61,6 +61,7 @@ type Meta struct {
 	FromMemory        bool        `json:"from_memory,omitempty"`
 	Context           *ContextRef `json:"context,omitempty"`
 	Recalls           []MemoryRef `json:"recalls,omitempty"`
+	GraphNeighbors    []MemoryRef `json:"graph_neighbors,omitempty"`
 	MemoryHint        string      `json:"memory_hint,omitempty"`
 }
 

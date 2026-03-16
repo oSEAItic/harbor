@@ -25,6 +25,7 @@ type Object struct {
 	CreatedAt  time.Time         `json:"created_at"`
 	TTLSeconds int               `json:"ttl_seconds"`
 	Author     string            `json:"author,omitempty"`
+	Refs       []string          `json:"refs,omitempty"`
 	Layers     Layers            `json:"layers"`
 	Meta       ObjectMeta        `json:"meta"`
 }

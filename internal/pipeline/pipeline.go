@@ -251,7 +251,7 @@ func buildContext(store *memory.Store, connectorName string) *protocol.ContextRe
 // with cloud notes and cross-connector notes from co-occurring connectors.
 func buildRecalls(store *memory.Store, connectorName, excludeID string) []protocol.MemoryRef {
 	const maxSameConnector = 3
-	const maxTotal = 5
+	const maxTotal = 7
 
 	related := store.Query(memory.QueryOptions{Connector: connectorName, Limit: 8})
 	var refs []protocol.MemoryRef
@@ -314,6 +314,34 @@ func buildRecalls(store *memory.Store, connectorName, excludeID string) []protoc
 					Fresh:    false,
 				})
 			}
+		}
+	}
+
+	// Graph neighbors: pull memories linked via explicit ref edges.
+	if len(refs) < maxTotal && excludeID != "" {
+		neighborIDs := memory.RefNeighbors(store.Dir(), excludeID, maxTotal-len(refs))
+		for _, nID := range neighborIDs {
+			if len(refs) >= maxTotal {
+				break
+			}
+			nObj, err := store.Get(nID)
+			if err != nil {
+				continue
+			}
+			summary := nObj.Layers.Summary
+			if summary == "" && len(nObj.Layers.Compact) > 0 {
+				summary = string(nObj.Layers.Compact)
+				if len(summary) > 120 {
+					summary = summary[:120] + "…"
+				}
+			}
+			refs = append(refs, protocol.MemoryRef{
+				ID:       nID,
+				Resource: nObj.Connector + "." + nObj.Resource,
+				Age:      formatMemoryAge(nObj.CreatedAt),
+				Summary:  summary,
+				Fresh:    false,
+			})
 		}
 	}
 

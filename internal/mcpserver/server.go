@@ -16,6 +16,7 @@ import (
 	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
 	"github.com/oseaitic/harbor/internal/recall"
+	"github.com/oseaitic/harbor/internal/remember"
 )
 
 // Serve starts a stdio MCP server that exposes all installed connectors as tools.
@@ -43,6 +44,9 @@ func Serve(version string) error {
 	// Register harbor_recall tool for cross-session memory access
 	memStore, _ := memory.NewStore()
 	s.AddTool(recall.ToolDefinition(), recall.MakeHandler(memStore))
+
+	// Register harbor_remember tool for persisting analysis notes
+	s.AddTool(remember.ToolDefinition(), remember.MakeHandler(memStore))
 
 	// Register harbor_http tool for auth-proxy HTTP fetching
 	s.AddTool(httpfetch.ToolDefinition(), httpfetch.MakeHandler())

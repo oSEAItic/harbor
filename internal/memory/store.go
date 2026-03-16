@@ -356,6 +356,15 @@ func (s *Store) Prune(maxAge time.Duration) (int, error) {
 		return 0, err
 	}
 
+	// Prune orphan edges from the knowledge graph.
+	if count > 0 {
+		validIDs := make(map[string]bool, len(idx.Entries))
+		for _, e := range idx.Entries {
+			validIDs[e.ID] = true
+		}
+		PruneOrphanEdges(s.dir, validIDs)
+	}
+
 	return count, nil
 }
 

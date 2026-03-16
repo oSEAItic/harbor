@@ -11,7 +11,7 @@ license: Apache-2.0
 compatibility: Requires macOS or Linux (amd64/arm64). Works with any MCP-compatible agent.
 metadata:
   author: oseaitic
-  version: "0.3.10"
+  version: "0.3.15"
   website: https://harbor.oseaitic.com
   repository: https://github.com/oSEAItic/harbor
 ---
@@ -40,6 +40,7 @@ If Harbor is already installed and configured as your MCP server, skip to **Usin
 |------|-------------|
 | `harbor_remember` | Save context that persists across sessions and agents |
 | `harbor_recall` | Search and retrieve past context |
+| `harbor_http` | Auth-proxy HTTP — call any API without exposing credentials |
 | `harbor_learn_schema` | Teach Harbor which API fields matter — reduces noise permanently |
 | `harbor_get` | Query a connector (API) with auto-recall |
 | Connector tools | Each installed connector exposes tools like `coingecko_prices` |
@@ -50,19 +51,37 @@ If Harbor is already installed and configured as your MCP server, skip to **Usin
 2. **Check for `[Harbor:]` hints** — if you see one, call `harbor_learn_schema` immediately with 3-6 key fields.
 3. **After analysis, save your findings** — call `harbor_remember` with a comprehensive summary.
 
+### Auth-proxy HTTP (harbor_http)
+
+Call any API through Harbor's credential store — your agent never sees raw API keys.
+
+```json
+{
+  "url": "https://api.github.com/repos/oSEAItic/harbor",
+  "auth": "github-pat",
+  "auth_header": "Authorization: Bearer"
+}
+```
+
+- `auth` — credential name in Harbor's keychain (set via `harbor auth <name>`)
+- `auth_header` — how to inject the credential (default: `Authorization: Bearer`)
+- Responses go through Harbor's full pipeline: memory, schema learning, context injection
+
 ### Saving context (harbor_remember)
 
 ```json
 {
   "connector": "coingecko",
   "note": "BTC dominance rising to 58%. SOL underperforming vs ETH. Market bullish but elevated risk.",
-  "author": "Claude Code"
+  "author": "Claude Code",
+  "refs": ["mem_abc123"]
 }
 ```
 
 Rules:
 - **Always pass your name** in `author` (e.g. "Claude Code", "Gemini CLI", "Cursor")
 - Write a comprehensive summary: what you analyzed, patterns found, conclusions, recommendations
+- Use `refs` to link to memory IDs your analysis builds upon — creates a knowledge graph
 - This note appears in `meta.context` on every future call to this connector — for you and every other agent
 
 ### Teaching schemas (harbor_learn_schema)
@@ -135,7 +154,8 @@ If MCP tools aren't available, use the CLI directly:
 
 ```bash
 harbor get coingecko.prices --param ids=bitcoin
-harbor remember coingecko "BTC dominance rising to 58%"
+harbor fetch https://api.github.com/repos/oSEAItic/harbor --auth github-pat
+harbor remember coingecko "BTC dominance rising to 58%" --refs mem_abc123
 harbor recall --list
 harbor recall --search "bitcoin"
 harbor install <connector>

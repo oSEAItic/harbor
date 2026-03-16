@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  Works with <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Codex</strong> &middot; <strong>Cursor</strong> &middot; <strong>Minimax</strong> &middot;<strong>Any MCP client</strong> &middot; <strong>Any Function Calling LLMs</strong>
+  Works with <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Codex</strong> &middot; <strong>Cursor</strong> &middot; <strong>OpenClaw</strong> &middot; <strong>Minimax</strong> &middot; <strong>Any MCP client</strong> &middot; <strong>Any Function Calling LLMs</strong>
 </p>
 
 <p align="center">
@@ -104,6 +104,16 @@ harbor get coingecko.prices --param ids=bitcoin --param vs_currencies=usd
 ```
 
 </details>
+
+### Auth-proxy any API (no connector needed)
+
+Call any API through Harbor's credential store — your agent never sees raw API keys:
+
+```bash
+harbor fetch https://api.github.com/repos/oSEAItic/harbor --auth github-pat
+```
+
+Or via MCP tool: `harbor_http(url="...", auth="github-pat")`. Responses go through the full pipeline — memory, schema learning, context injection.
 
 ### Proxy any existing MCP server
 

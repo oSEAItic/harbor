@@ -39,6 +39,23 @@ harbor get <connector.resource> --full
 harbor raw <connector.resource> --param key=value
 ```
 
+### Auth-proxy HTTP fetching
+
+Call any API through Harbor's credential store — no connector needed.
+
+```bash
+# GET with auth
+harbor fetch https://api.github.com/repos/oSEAItic/harbor --auth github-pat
+
+# POST with body
+harbor fetch https://api.example.com/data -X POST -d '{"key":"val"}' --auth my-api
+
+# Custom auth header (e.g. X-API-Key instead of Authorization: Bearer)
+harbor fetch https://api.coingecko.com/api/v3/pro/coins --auth coingecko-pro --auth-header "x-cg-pro-api-key"
+```
+
+Responses go through the full pipeline: memory, schema learning, context injection.
+
 ### Memory and recall
 
 ```bash
@@ -54,6 +71,7 @@ harbor recall <connector.resource> --layer compact
 
 # Save analysis conclusions (persists across sessions and devices)
 harbor remember <connector> "Your analysis summary here"
+harbor remember <connector> "summary" --refs mem_abc123,mem_def456
 ```
 
 ### Connector management
@@ -165,6 +183,27 @@ Parameters:
 - `layer` (string, optional): `raw` | `normalized` | `compact` | `summary` (default: `compact`)
 - `since` (string, optional): time filter, e.g. `"30m"`, `"2h"`, `"1d"`
 
+### harbor_http
+
+Auth-proxy HTTP — call any API through Harbor's credential store. Your agent never sees raw API keys.
+
+```json
+{
+  "url": "https://api.github.com/repos/oSEAItic/harbor",
+  "auth": "github-pat",
+  "auth_header": "Authorization: Bearer"
+}
+```
+
+Parameters:
+- `url` (string, required): full URL to fetch
+- `method` (string, optional): HTTP method, default GET
+- `body` (string, optional): request body for POST/PUT
+- `auth` (string, optional): credential name in Harbor keychain (set via `harbor auth <name>`)
+- `auth_header` (string, optional): how to inject credential (default: `Authorization: Bearer`). For APIs that use custom headers, pass the header name (e.g. `X-API-Key`)
+
+The response goes through Harbor's full pipeline: memory, schema learning, context injection.
+
 ### harbor_remember
 
 Persist your analysis conclusions for future sessions.
@@ -173,11 +212,14 @@ Persist your analysis conclusions for future sessions.
 {
   "connector": "coingecko",
   "note": "BTC/ETH correlation high (r=0.94). SOL volatile (+40% weekly). Market bullish but elevated risk.",
-  "author": "Claude Code"
+  "author": "Claude Code",
+  "refs": ["mem_abc123"]
 }
 ```
 
 **Always pass your name in `author`** — e.g. `"Claude Code"`, `"Gemini"`, `"Cursor"`, `"GPT-4"`. This lets the next agent (which may be a different model) know who produced the analysis. If omitted, Harbor attempts auto-detection from environment variables.
+
+Use `refs` to link to memory IDs your analysis builds upon — this creates knowledge graph edges. When any agent recalls a referenced memory, linked memories are automatically surfaced as neighbors.
 
 Your note appears as `meta.context` on every future call to this connector — for you and every other agent. Compose a comprehensive summary covering:
 1. What you analyzed and why

@@ -11,9 +11,27 @@ Save analysis context that persists across sessions and agents.
 |------|------|----------|-------------|
 | `connector` | string | Yes | Connector name (e.g. "coingecko") |
 | `note` | string | Yes | Your analysis summary |
-| `author` | string | Yes | Your agent name (e.g. "Claude Code") |
+| `author` | string | No | Your agent name (e.g. "Claude Code"). Auto-detected if omitted. |
+| `refs` | string[] | No | Memory IDs this note references (creates knowledge graph edges) |
 
-**Behavior:** The note is stored and automatically injected as `meta.context` in every future call to this connector — by any agent, any model, any session.
+**Behavior:** The note is stored and automatically injected as `meta.context` in every future call to this connector — by any agent, any model, any session. Referenced memories are linked via graph edges and surfaced as neighbors on recall.
+
+---
+
+### harbor_http
+
+Auth-proxy HTTP fetching — call any API through Harbor's credential store. Your agent never sees raw API keys.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `url` | string | Yes | Full URL to fetch |
+| `method` | string | No | HTTP method (default: GET) |
+| `body` | string | No | Request body (for POST/PUT) |
+| `auth` | string | No | Credential name in Harbor keychain |
+| `auth_header` | string | No | How to inject credential (default: "Authorization: Bearer") |
+
+**Behavior:** Harbor retrieves the credential from keychain, injects it into the request header, executes the HTTP call, and passes the response through the full pipeline (memory, schema learning, context injection). The agent never touches the raw API key.
 
 ---
 
@@ -85,10 +103,19 @@ harbor get coingecko.prices --param ids=bitcoin
 harbor raw <connector.resource> --param key=value    # full upstream response
 ```
 
+### Auth-proxy HTTP
+
+```bash
+harbor fetch <url> --auth <credential-name>              # GET with auth
+harbor fetch <url> --auth <name> -X POST -d '{"key":"val"}'  # POST
+harbor fetch <url> --auth <name> --auth-header "X-API-Key"   # custom header
+```
+
 ### Memory
 
 ```bash
 harbor remember <connector> "Your analysis summary"
+harbor remember <connector> "note" --refs mem_abc123,mem_def456  # with refs
 harbor recall --list                    # browse all memories
 harbor recall --search "keyword"        # search memories
 harbor recall <connector.resource>      # retrieve specific memory

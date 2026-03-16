@@ -60,6 +60,7 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 					// Inject context (pinned connector note) and data-fetch recalls.
 					resp.Meta.Context = buildContext(store, connectorName)
 					resp.Meta.Recalls = buildRecalls(store, connectorName, obj.ID)
+					memory.RecordCall(store.Dir(), connectorName)
 					if resp.Meta.Context == nil {
 						resp.Meta.MemoryHint = "When you finish analyzing this connector's data, call harbor_remember with a comprehensive note: what you found, patterns observed, and your conclusions. This becomes your persistent context — shown at the start of every future session with this connector."
 					}
@@ -148,6 +149,7 @@ func Execute(exec executor.Executor, connectorName, resource string, params map[
 				// Inject context (pinned connector note) and data-fetch recalls.
 				compiled.Meta.Context = buildContext(store, connectorName)
 				compiled.Meta.Recalls = buildRecalls(store, connectorName, id)
+				memory.RecordCall(store.Dir(), connectorName)
 				compiled.Meta.MemoryHint = "" // clear any value inherited from remote gateway
 				if compiled.Meta.Context == nil {
 					compiled.Meta.MemoryHint = "When you finish analyzing this connector's data, call harbor_remember with a comprehensive note: what you found, patterns observed, and your conclusions. This becomes your persistent context — shown at the start of every future session with this connector."
@@ -245,8 +247,12 @@ func buildContext(store *memory.Store, connectorName string) *protocol.ContextRe
 
 // buildRecalls queries the store for recent data-fetch entries from the same
 // connector, excluding notes (those appear in Context) and the current entry.
-// Returns up to 3 MemoryRef values; cross-device cloud notes fill remaining slots.
+// Returns up to 3 same-connector MemoryRef values, then fills remaining slots
+// with cloud notes and cross-connector notes from co-occurring connectors.
 func buildRecalls(store *memory.Store, connectorName, excludeID string) []protocol.MemoryRef {
+	const maxSameConnector = 3
+	const maxTotal = 5
+
 	related := store.Query(memory.QueryOptions{Connector: connectorName, Limit: 8})
 	var refs []protocol.MemoryRef
 	for _, e := range related {
@@ -260,16 +266,16 @@ func buildRecalls(store *memory.Store, connectorName, excludeID string) []protoc
 			Summary:  e.Summary,
 			Fresh:    store.IsFresh(&e),
 		})
-		if len(refs) == 3 {
+		if len(refs) == maxSameConnector {
 			break
 		}
 	}
 
 	// Fill remaining slots with cloud notes (cross-device memories pulled on login).
-	if len(refs) < 3 {
+	if len(refs) < maxSameConnector {
 		noteStore := memory.NewNoteStore()
 		for _, n := range noteStore.ForConnector(connectorName) {
-			if len(refs) >= 3 {
+			if len(refs) >= maxSameConnector {
 				break
 			}
 			resource := strings.TrimPrefix(n.Key, connectorName+".")
@@ -280,6 +286,34 @@ func buildRecalls(store *memory.Store, connectorName, excludeID string) []protoc
 				Summary:  n.Content,
 				Fresh:    false,
 			})
+		}
+	}
+
+	// Cross-connector recall: pull notes from connectors that frequently co-occur.
+	if len(refs) < maxTotal {
+		coConnectors := memory.RelatedConnectors(store.Dir(), connectorName, 3)
+		for _, co := range coConnectors {
+			if len(refs) >= maxTotal {
+				break
+			}
+			// Get the context note for the co-occurring connector.
+			coResults := store.Query(memory.QueryOptions{
+				Connector: co,
+				Resource:  "_context",
+				Limit:     1,
+			})
+			for _, e := range coResults {
+				if len(refs) >= maxTotal {
+					break
+				}
+				refs = append(refs, protocol.MemoryRef{
+					ID:       e.ID,
+					Resource: co + "._context",
+					Age:      formatMemoryAge(e.CreatedAt),
+					Summary:  e.Summary,
+					Fresh:    false,
+				})
+			}
 		}
 	}
 

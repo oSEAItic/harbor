@@ -50,6 +50,9 @@ func NewStoreAt(dir string) (*Store, error) {
 	return s, nil
 }
 
+// Dir returns the store's root directory path (e.g. ~/.harbor/memory).
+func (s *Store) Dir() string { return s.dir }
+
 // maybeRebuildIndex checks whether the index is missing entries for existing
 // objects (e.g. objects saved by an older binary that didn't maintain the index)
 // and triggers a full rebuild if needed. Called once at store creation.

@@ -49,6 +49,7 @@ Workflow:
 	// ── Core ─────────────────────────────────────────────────────
 	addCmd(root, "core",
 		newGetCmd(outputFormat),
+		newFetchCmd(),
 		newRememberCmd(),
 		newListCmd(),
 		newInstallCmd(),

@@ -11,6 +11,7 @@ import (
 	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/connector"
 	"github.com/oseaitic/harbor/internal/executor"
+	"github.com/oseaitic/harbor/internal/httpfetch"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/pipeline"
 	"github.com/oseaitic/harbor/internal/protocol"
@@ -42,6 +43,9 @@ func Serve(version string) error {
 	// Register harbor_recall tool for cross-session memory access
 	memStore, _ := memory.NewStore()
 	s.AddTool(recall.ToolDefinition(), recall.MakeHandler(memStore))
+
+	// Register harbor_http tool for auth-proxy HTTP fetching
+	s.AddTool(httpfetch.ToolDefinition(), httpfetch.MakeHandler())
 
 	return server.ServeStdio(s)
 }

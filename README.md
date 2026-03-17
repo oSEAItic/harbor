@@ -64,13 +64,37 @@ Every agent on your machine shares the same memory layer. When one agent saves a
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
-**2. Agent Skill / Plugin** (Claude Code, Codex, Copilot, Cursor, Gemini CLI):
+**2. Agent Skill / Plugin:**
+
+<details>
+<summary>Claude Code / Codex / Cursor / Gemini CLI</summary>
 
 ```bash
 claude plugin marketplace add oSEAItic/harbor && claude plugin install harbor@harbor-marketplace
 ```
 
-Or for any agent that supports [Agent Skills](https://agentskills.io) — the `skills/harbor/SKILL.md` in this repo is auto-indexed.
+Or point any agent that supports [Agent Skills](https://agentskills.io) at `skills/harbor/SKILL.md`.
+
+</details>
+
+<details>
+<summary>OpenClaw</summary>
+
+```bash
+# Install Harbor CLI first
+go install github.com/oseaitic/harbor/cmd/harbor@latest
+
+# Install the OpenClaw plugin
+openclaw plugins install github.com/oSEAItic/harbor/plugins/harbor-openclaw --link
+```
+
+The plugin auto-provisions a free cloud account (50 memories) on first use. Adds `harbor_remember` + `harbor_recall` tools to your agents, syncs context to workspace on session start, and captures insights before compaction.
+
+Run `harbor cloud disable` to opt out of cloud sync (local-only mode).
+
+See [plugins/harbor-openclaw/README.md](plugins/harbor-openclaw/README.md) for details.
+
+</details>
 
 **3. Paste into your agent** (zero install — agent does everything):
 
@@ -181,18 +205,28 @@ Harbor never calls an LLM internally. The connected agent **is** the LLM:
 3. **Stored permanently** — all future calls are curated. Every agent on the machine benefits.
 4. **Drift detection** — if upstream changes shape, Harbor detects and re-learns.
 
-### Memory & Recall
+### Memory & Recall — Topic-First
 
-Every call is cached into 4-layer memory. Agents recall across sessions:
+Memory is organized by **topic**, not by connector. Agents save what they learned, not where they learned it:
 
 ```
-harbor_recall(query="bitcoin")              # Search by keyword
-harbor_recall(id="mem_abc123")              # Retrieve full content
-harbor_remember(connector="coingecko",      # Save analysis conclusions
-  note="BTC/ETH correlation high...")
+harbor_remember(topic="ws-reconnect",         # Save by topic
+  note="Root cause: no backoff in ws.go",
+  connector="kuse-hive",                       # Optional scope
+  refs=["mem_abc123"])                          # Link related notes
+
+harbor_recall(query="websocket")               # Search by keyword
+harbor_recall(id="mem_abc123")                 # Retrieve specific note
+harbor_remember(topic="billing", note="...")    # Global note (no connector)
 ```
 
-Notes saved via `harbor_remember` appear as `meta.context` on every future call to that connector — **this is how agents share memory across sessions and across models.**
+Notes from the same agent session are automatically grouped by `session_id`. Reference edges between notes form a **knowledge graph** — agents declare which notes are related via `--refs`.
+
+```bash
+harbor forget mem_abc123                       # Delete by ID
+harbor forget --topic ws-reconnect             # Delete by topic
+harbor forget --connector kuse-hive --confirm  # Bulk delete
+```
 
 ### Credential injection
 
@@ -244,10 +278,18 @@ Through Harbor — structured, attributed, with cross-session context:
 
 ## Harbor Cloud
 
-Sync credentials, schemas, and memories across machines.
+Sync credentials, schemas, and memories across machines. **Free tier available — no signup required:**
 
 ```bash
-harbor login                          # Sign in
+harbor cloud enable                   # Auto-provision free account (50 memories, zero config)
+harbor cloud status                   # Check connection
+harbor cloud disable                  # Opt out (local-only mode)
+```
+
+Or sign in for unlimited:
+
+```bash
+harbor login                          # Sign in with email
 harbor auth my-connector              # Store API key (client-side encrypted)
 harbor auth sync my-connector         # Pull credentials on another machine
 harbor publish my-connector           # Publish private connector

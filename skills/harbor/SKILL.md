@@ -11,7 +11,7 @@ license: Apache-2.0
 compatibility: Requires macOS or Linux (amd64/arm64). Works with any MCP-compatible agent.
 metadata:
   author: oseaitic
-  version: "0.3.15"
+  version: "0.4.0"
   website: https://harbor.oseaitic.com
   repository: https://github.com/oSEAItic/harbor
 ---
@@ -67,12 +67,15 @@ Call any API through Harbor's credential store — your agent never sees raw API
 - `auth_header` — how to inject the credential (default: `Authorization: Bearer`)
 - Responses go through Harbor's full pipeline: memory, schema learning, context injection
 
-### Saving context (harbor_remember)
+### Saving context (harbor_remember) — Topic-First
+
+Notes are organized by **topic**, not connector. Connector is optional scope:
 
 ```json
 {
+  "topic": "market-trends",
+  "note": "BTC dominance rising to 58%. SOL underperforming vs ETH.",
   "connector": "coingecko",
-  "note": "BTC dominance rising to 58%. SOL underperforming vs ETH. Market bullish but elevated risk.",
   "author": "Claude Code",
   "refs": ["mem_abc123"]
 }

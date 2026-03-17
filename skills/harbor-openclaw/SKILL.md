@@ -6,7 +6,6 @@ description: >-
   sessions, call APIs without exposing credentials, reduce noisy API responses
   to relevant fields, or share knowledge between agents. Also use when the user
   mentions Harbor, agent memory, credential isolation, or schema learning.
-version: 0.3.15
 metadata:
   openclaw:
     requires:
@@ -86,24 +85,26 @@ Or via MCP tool:
 - `auth_header` — how to inject the credential (default: `Authorization: Bearer`). For custom headers: `"x-cg-pro-api-key"`, `"X-API-Key"`, etc.
 - Responses go through the full pipeline: memory, schema learning, context injection
 
-### Saving context (harbor_remember)
+### Saving context (harbor_remember) — Topic-First
 
-After analyzing data, save your findings so they persist across sessions:
+Notes are organized by **topic**, not connector. Connector is optional scope:
 
 ```json
 {
+  "topic": "github-activity",
+  "note": "Harbor repo has 247 stars, 12 open issues. Active development on auth-proxy and memory features.",
   "connector": "github",
-  "note": "Harbor repo has 247 stars, 12 open issues. Main contributor is oseaitic. Active development on auth-proxy and memory features.",
-  "author": "OpenClaw",
+  "author": "OpenClaw Agent",
   "refs": ["mem_abc123"]
 }
 ```
 
 Rules:
-- **Always pass `"OpenClaw"` as author** — so other agents know who produced the analysis
+- **Use descriptive topic keys** — e.g. `"ws-reconnect"`, `"billing-logic"`, `"market-trends"`
+- **Always pass `"OpenClaw Agent"` as author** — so other agents know who produced the analysis
 - Write comprehensive summaries: what you analyzed, patterns found, conclusions
 - Use `refs` to link to memory IDs your analysis builds upon — creates a knowledge graph
-- This note appears as context on every future call to this connector
+- Notes from the same session are auto-grouped by `session_id`
 
 ### Recalling past context (harbor_recall)
 
@@ -146,7 +147,9 @@ If MCP tools aren't available, use the CLI:
 ```bash
 harbor fetch <url> --auth <credential-name>              # Auth-proxy HTTP
 harbor get <connector.resource> --param key=value         # Connector fetch
-harbor remember <connector> "Your analysis summary"       # Save context
+harbor remember <topic> "Your analysis summary"             # Save context
+harbor remember --connector <name> <topic> "summary"       # Scoped to connector
+harbor forget mem_xxx                                      # Delete memory
 harbor recall --search "keyword"                          # Search memory
 harbor auth <name>                                        # Store credential
 harbor doctor --json                                      # Diagnostics
@@ -159,6 +162,20 @@ harbor doctor --json                                      # Diagnostics
 | `harbor: command not found` | Run `curl -fsSL https://harbor.oseaitic.com/install \| bash` |
 | "auth required" / 401 | Run `harbor auth <credential-name>` to store the API key |
 | Empty `data[]` | Check params. Run `harbor doctor --json` for diagnostics |
+
+## OpenClaw Plugin (recommended)
+
+For deeper integration, install the Harbor OpenClaw plugin:
+
+```bash
+openclaw plugins install github.com/oSEAItic/harbor/plugins/harbor-openclaw --link
+```
+
+The plugin:
+- Registers `harbor_remember` + `harbor_recall` as native OpenClaw agent tools
+- Syncs Harbor context to your workspace on session start (auto-indexed by OpenClaw)
+- Captures context before compaction (prevents memory loss)
+- Auto-provisions a free cloud account (50 memories, opt out with `harbor cloud disable`)
 
 ## Why Harbor for OpenClaw
 

@@ -54,7 +54,13 @@ Example:
 			}
 
 			// Best-effort cloud push with topic/session/connector metadata.
-			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
+			cfg, cfgErr := cloudauth.Load()
+			// If no cloud config and not opted out, offer auto-provision (once).
+			if cfgErr != nil && !cloudauth.IsOptedOut() && !cloudauth.IsLoggedIn() {
+				fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Enable cross-device memory sync? (free, 50 memories)\n")
+				fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Run 'harbor cloud enable' to opt in, or 'harbor cloud disable' to never ask again.\n")
+			}
+			if cfgErr == nil {
 				key := conn + "." + topic + "." + id
 				// Get session ID from the saved object for cloud sync.
 				var sessionID string

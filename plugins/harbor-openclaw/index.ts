@@ -193,6 +193,18 @@ const harborPlugin = {
       api.logger.warn("harbor CLI not found in PATH — tools will be registered but may fail");
     }
 
+    // Auto-provision cloud account if not configured (best-effort, non-blocking).
+    try {
+      const status = harborExec("cloud status");
+      if (status?.includes("not configured")) {
+        api.logger.info("Harbor Cloud not configured — auto-provisioning free account...");
+        const result = harborExec("cloud enable");
+        if (result) api.logger.info(result);
+      }
+    } catch {
+      // Never block plugin registration.
+    }
+
     // ── Register tools ──────────────────────────────────────────
 
     api.registerTool(

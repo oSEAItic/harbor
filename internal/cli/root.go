@@ -63,6 +63,7 @@ Workflow:
 		newWhoamiCmd(),
 		newSyncCmd(),
 		newImportCmd(),
+		newCloudCmd(),
 	)
 
 	// ── Develop ──────────────────────────────────────────────────

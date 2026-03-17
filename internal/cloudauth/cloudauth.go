@@ -6,8 +6,12 @@
 package cloudauth
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -77,6 +81,78 @@ func Load() (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// DefaultEndpoint is the production Harbor Cloud URL.
+const DefaultEndpoint = "https://harbor-cloud.oseaitic.com"
+
+// AutoProvision creates an anonymous cloud account using a device fingerprint.
+// Returns the API key on success. The config is saved to disk automatically.
+func AutoProvision() (string, error) {
+	fp := deviceFingerprint()
+
+	payload, _ := json.Marshal(map[string]string{"device_fingerprint": fp})
+	resp, err := http.Post(DefaultEndpoint+"/api/auth/auto-provision", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("auto-provision request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("auto-provision returned %d", resp.StatusCode)
+	}
+
+	var result struct {
+		APIKey string `json:"api_key"`
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decoding response: %w", err)
+	}
+
+	cfg := Config{
+		Endpoint:  DefaultEndpoint,
+		APIKey:    result.APIKey,
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := Save(cfg); err != nil {
+		return "", fmt.Errorf("saving config: %w", err)
+	}
+
+	return result.APIKey, nil
+}
+
+// OptOutPath returns the path to the cloud opt-out marker file.
+func OptOutPath() string {
+	return harborhome.Path("cloud-optout")
+}
+
+// IsOptedOut returns true if the user has declined cloud sync.
+func IsOptedOut() bool {
+	_, err := os.Stat(OptOutPath())
+	return err == nil
+}
+
+// OptOut creates the opt-out marker file so we never ask again.
+func OptOut() error {
+	return os.WriteFile(OptOutPath(), []byte("opted out of cloud sync\n"), 0o600)
+}
+
+// ClearOptOut removes the opt-out marker file.
+func ClearOptOut() error {
+	err := os.Remove(OptOutPath())
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
+// deviceFingerprint generates a stable hash from hostname + OS info.
+func deviceFingerprint() string {
+	hostname, _ := os.Hostname()
+	raw := fmt.Sprintf("harbor:%s:%s", hostname, os.Getenv("USER"))
+	h := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(h[:])
 }
 
 // Delete removes cloud credentials from disk.

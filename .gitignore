@@ -46,3 +46,8 @@ doc/
 *.test
 cover.out
 coverage.html
+
+# Deploy configs (infra-specific, not product code)
+fly.toml
+fly.*.toml
+deploy/fly.*.toml

@@ -212,48 +212,23 @@ func (s *Store) SaveNoteWithSession(connector, topic, note, author, sessionID st
 		SessionID:  sessionID,
 		Layers:     Layers{Summary: note},
 	}
-	id, err := s.Save(obj)
-	if err != nil {
-		return "", err
-	}
-
-	// Auto-refs: link to other notes in the same session.
-	s.autoLinkSession(id, sessionID)
-
-	return id, nil
+	return s.Save(obj)
 }
 
-// defaultSessionID generates a stable session ID from PID + today's date.
-// Same process on the same day = same session.
+// defaultSessionID generates a stable session ID from PPID + today's date.
+// PPID is the parent shell process — stable within one agent session (e.g.
+// Claude Code reuses the same shell for all Bash tool calls). Different agent
+// sessions spawn different shells, so PPID naturally changes.
+// HARBOR_SESSION env var overrides for explicit control.
 func defaultSessionID() string {
-	pid := os.Getpid()
+	if envSes := os.Getenv("HARBOR_SESSION"); envSes != "" {
+		return envSes
+	}
+	ppid := os.Getppid()
 	day := time.Now().UTC().Format("2006-01-02")
-	raw := fmt.Sprintf("ses_%d_%s", pid, day)
+	raw := fmt.Sprintf("ses_%d_%s", ppid, day)
 	h := sha256.Sum256([]byte(raw))
 	return "ses_" + hex.EncodeToString(h[:])[:8]
-}
-
-// autoLinkSession finds other notes with the same sessionID and creates
-// bidirectional ref edges between the new note and existing session notes.
-func (s *Store) autoLinkSession(newID, sessionID string) {
-	if sessionID == "" {
-		return
-	}
-	idx := loadIndex(s.dir)
-	var siblings []string
-	for _, e := range idx.Entries {
-		if e.SessionID == sessionID && e.Schema == SchemaNote && e.ID != newID {
-			siblings = append(siblings, e.ID)
-		}
-	}
-	if len(siblings) == 0 {
-		return
-	}
-	// Link new note → all siblings, and each sibling → new note.
-	AddRefEdges(s.dir, newID, siblings)
-	for _, sib := range siblings {
-		AddRefEdges(s.dir, sib, []string{newID})
-	}
 }
 
 // ImportCloudNote saves a note that originated from cloud sync.

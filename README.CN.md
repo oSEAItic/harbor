@@ -287,6 +287,46 @@ harbor publish my-connector           # 发布私有连接器
 
 ---
 
+## OpenClaw 插件
+
+Harbor 提供原生 [OpenClaw 插件](plugins/harbor-openclaw/)，增强 OpenClaw 的记忆系统：
+
+| 功能 | OpenClaw 原生 | + Harbor 插件 |
+|------|-------------|--------------|
+| 记忆组织 | 原始文本写入 MEMORY.md | 按主题组织、结构化、去重 |
+| 跨设备 | 仅本地文件 | 通过 Harbor Cloud 云端同步（免费层：50 条） |
+| 跨 Agent | 每个 Agent 独立工作区 | 跨 Agent 共享记忆池 |
+| 知识图谱 | 无 | 相关洞察之间的引用边 |
+| 上下文丢失 | 压缩时丢失 | 压缩前自动捕获 |
+
+### 插件功能
+
+- **`harbor_remember` + `harbor_recall` 工具** —— 注册为 OpenClaw 原生 Agent 工具
+- **会话启动钩子** —— 将 Harbor 精选上下文写入 `memory/harbor-context.md`，OpenClaw 文件监听器自动索引
+- **压缩前钩子** —— 通过 `harbor remember` 在上下文被压缩前自动捕获
+- **自动创建账号** —— 首次使用时创建免费云端账号（`harbor cloud disable` 退出）
+
+### 安装
+
+```bash
+go install github.com/oseaitic/harbor/cmd/harbor@latest
+openclaw plugins install github.com/oSEAItic/harbor/plugins/harbor-openclaw --link
+```
+
+### 配置
+
+在 OpenClaw 配置中（`plugins.entries.harbor.config`）：
+
+```json
+{
+  "autoSync": true,
+  "autoCapture": true,
+  "contextFile": "memory/harbor-context.md"
+}
+```
+
+---
+
 ## 创建连接器
 
 连接器是 exec 插件 —— 独立程序，读取参数并将 JSON 输出到 stdout。可以用任何语言构建。

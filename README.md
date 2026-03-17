@@ -299,6 +299,46 @@ Credentials are encrypted client-side with AES-256-GCM. The server stores only c
 
 ---
 
+## OpenClaw Plugin
+
+Harbor ships a native [OpenClaw plugin](plugins/harbor-openclaw/) that enhances OpenClaw's memory system:
+
+| Feature | OpenClaw native | + Harbor plugin |
+|---------|----------------|-----------------|
+| Memory organization | Raw text dump to MEMORY.md | Topic-first, structured, deduplicated |
+| Cross-device | Local files only | Cloud sync via Harbor Cloud (free tier: 50 memories) |
+| Cross-agent | Per-agent workspace | Shared memory pool across agents |
+| Knowledge graph | None | Ref edges between related insights |
+| Context loss | Lost on compaction | Auto-captured before compaction |
+
+### What the plugin does
+
+- **`harbor_remember` + `harbor_recall` tools** — registered as native OpenClaw agent tools
+- **Session start hook** — writes Harbor's curated context to `memory/harbor-context.md`, auto-indexed by OpenClaw's file watcher
+- **Pre-compaction hook** — captures session context via `harbor remember` before it's lost to compaction
+- **Auto-provision** — creates a free cloud account on first use (opt out with `harbor cloud disable`)
+
+### Install
+
+```bash
+go install github.com/oseaitic/harbor/cmd/harbor@latest
+openclaw plugins install github.com/oSEAItic/harbor/plugins/harbor-openclaw --link
+```
+
+### Config
+
+In OpenClaw config (`plugins.entries.harbor.config`):
+
+```json
+{
+  "autoSync": true,
+  "autoCapture": true,
+  "contextFile": "memory/harbor-context.md"
+}
+```
+
+---
+
 ## Creating a Connector
 
 Connectors are exec plugins — standalone programs that read arguments and write JSON to stdout. Build in any language.

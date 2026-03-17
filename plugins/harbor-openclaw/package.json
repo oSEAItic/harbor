@@ -1,0 +1,11 @@
+{
+  "name": "@harbor/openclaw-plugin",
+  "version": "0.1.0",
+  "description": "Harbor memory plugin for OpenClaw — curated context, cross-device sync, knowledge graph",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "files": ["index.ts", "openclaw.plugin.json"],
+  "license": "MIT",
+  "keywords": ["openclaw-plugin", "harbor", "memory", "context", "knowledge-graph"]
+}

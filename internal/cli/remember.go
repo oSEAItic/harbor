@@ -53,11 +53,26 @@ Example:
 				memory.AddRefEdges(store.Dir(), id, refs)
 			}
 
-			// Best-effort cloud push with author.
+			// Best-effort cloud push with topic/session/connector metadata.
 			if cfg, cfgErr := cloudauth.Load(); cfgErr == nil {
 				key := conn + "." + topic + "." + id
-				if pushErr := cloudauth.PushMemory(key, note, author, cfg); pushErr != nil {
+				// Get session ID from the saved object for cloud sync.
+				var sessionID string
+				if obj, getErr := store.Get(id); getErr == nil {
+					sessionID = obj.SessionID
+				}
+				if pushErr := cloudauth.PushMemoryFull(key, note, author, topic, sessionID, conn, cfg); pushErr != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] cloud sync failed for %s: %v\n", key, pushErr)
+				}
+				// Push ref edges to cloud.
+				if len(refs) > 0 {
+					var edges []cloudauth.GraphEdge
+					for _, ref := range refs {
+						edges = append(edges, cloudauth.GraphEdge{From: id, To: ref, Kind: "ref"})
+					}
+					if pushErr := cloudauth.PushEdges(edges, cfg); pushErr != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] edge sync failed: %v\n", pushErr)
+					}
 				}
 			}
 

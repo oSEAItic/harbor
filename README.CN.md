@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  支持 <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Codex</strong> &middot; <strong>Cursor</strong> &middot; <strong>Minimax</strong> &middot; <strong>任何 MCP 客户端</strong> &middot; <strong>任何 Function Calling LLM</strong>
+  支持 <strong>Claude Code</strong> &middot; <strong>Gemini CLI</strong> &middot; <strong>Codex</strong> &middot; <strong>Cursor</strong> &middot; <strong>OpenClaw</strong> &middot; <strong>Minimax</strong> &middot; <strong>任何 MCP 客户端</strong> &middot; <strong>任何 Function Calling LLM</strong>
 </p>
 
 <p align="center">
@@ -64,13 +64,37 @@ Claude Code 分析你的加密货币持仓。关掉会话。之后另一个 Agen
 curl -fsSL https://harbor.oseaitic.com/install | bash
 ```
 
-**2. Agent Skill / Plugin**（Claude Code、Codex、Copilot、Cursor、Gemini CLI）：
+**2. Agent Skill / Plugin：**
+
+<details>
+<summary>Claude Code / Codex / Cursor / Gemini CLI</summary>
 
 ```bash
 claude plugin marketplace add oSEAItic/harbor && claude plugin install harbor@harbor-marketplace
 ```
 
-或者任何支持 [Agent Skills](https://agentskills.io) 的 agent —— 本 repo 的 `skills/harbor/SKILL.md` 会被自动索引。
+或者任何支持 [Agent Skills](https://agentskills.io) 的 agent —— `skills/harbor/SKILL.md` 会被自动索引。
+
+</details>
+
+<details>
+<summary>OpenClaw</summary>
+
+```bash
+# 先安装 Harbor CLI
+go install github.com/oseaitic/harbor/cmd/harbor@latest
+
+# 安装 OpenClaw 插件
+openclaw plugins install github.com/oSEAItic/harbor/plugins/harbor-openclaw --link
+```
+
+插件首次使用时自动创建免费云端账号（50 条记忆）。为你的 Agent 添加 `harbor_remember` + `harbor_recall` 工具，会话开始时自动同步上下文到工作区，压缩前自动捕获洞察。
+
+不需要云端同步？运行 `harbor cloud disable` 切换到纯本地模式。
+
+详见 [plugins/harbor-openclaw/README.md](plugins/harbor-openclaw/README.md)。
+
+</details>
 
 **3. 粘贴到你的 Agent**（零安装 —— Agent 全自动完成）：
 
@@ -169,18 +193,28 @@ Harbor 内部不调用 LLM。连接到 Harbor 的 Agent **本身就是** LLM：
 3. **永久存储** —— 后续所有调用自动精选。同一台机器上的所有 Agent 共享成果。
 4. **漂移检测** —— 上游变更时，Harbor 检测并重新学习。
 
-### 记忆与检索
+### 记忆与检索 —— Topic-First
 
-每次调用都缓存到 4 层记忆系统。Agent 跨会话检索：
+记忆按 **topic（主题）** 组织，而不是按连接器。Agent 保存的是「学到了什么」，而不是「从哪里学的」：
 
 ```
-harbor_recall(query="bitcoin")              # 关键词搜索
-harbor_recall(id="mem_abc123")              # 检索完整内容
-harbor_remember(connector="coingecko",      # 保存分析结论
-  note="BTC/ETH 相关性高...")
+harbor_remember(topic="ws-reconnect",         # 按主题保存
+  note="根因：ws.go 没有退避机制",
+  connector="kuse-hive",                       # 可选范围
+  refs=["mem_abc123"])                          # 关联相关笔记
+
+harbor_recall(query="websocket")               # 关键词搜索
+harbor_recall(id="mem_abc123")                 # 检索特定笔记
+harbor_remember(topic="billing", note="...")    # 全局笔记（无连接器）
 ```
 
-通过 `harbor_remember` 保存的备注会作为 `meta.context` 出现在未来每一次调用中 —— **这就是 Agent 跨会话、跨模型共享记忆的方式。**
+同一 Agent 会话中的笔记通过 `session_id` 自动分组。笔记之间的引用边构成**知识图谱** —— Agent 通过 `--refs` 声明哪些笔记相关。
+
+```bash
+harbor forget mem_abc123                       # 按 ID 删除
+harbor forget --topic ws-reconnect             # 按主题删除
+harbor forget --connector kuse-hive --confirm  # 批量删除
+```
 
 ### 凭证注入
 
@@ -232,10 +266,18 @@ harbor_remember(connector="coingecko",      # 保存分析结论
 
 ## Harbor Cloud
 
-跨设备同步凭据、Schema 和记忆。
+跨设备同步凭据、Schema 和记忆。**免费层开箱即用，无需注册：**
 
 ```bash
-harbor login                          # 登录
+harbor cloud enable                   # 自动创建免费账号（50 条记忆，零配置）
+harbor cloud status                   # 查看连接状态
+harbor cloud disable                  # 退出云端同步（纯本地模式）
+```
+
+或登录获取无限量：
+
+```bash
+harbor login                          # 用邮箱登录
 harbor auth my-connector              # 存储 API Key（客户端加密）
 harbor auth sync my-connector         # 在另一台机器上拉取凭据
 harbor publish my-connector           # 发布私有连接器

@@ -3,8 +3,12 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os/exec"
+	"runtime"
 
+	"github.com/oseaitic/harbor/internal/cloudauth"
 	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/httpfetch"
 	"github.com/oseaitic/harbor/internal/pipeline"
@@ -72,6 +76,21 @@ Examples:
 				AuthName:   authName,
 				AuthHeader: authHeader,
 			})
+
+			// If credential is missing, offer browser-based setup.
+			var missingCred *httpfetch.MissingCredentialError
+			if errors.As(err, &missingCred) {
+				setupURL := credentialSetupURL(missingCred.Name)
+				if setupURL != "" {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Credential %q not found. Opening setup page...\n", missingCred.Name)
+					openBrowser(setupURL)
+					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] After saving your key, re-run this command.\n")
+					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Or run: harbor auth %s\n", missingCred.Name)
+					return nil
+				}
+				// No cloud account — fall back to CLI hint.
+				return fmt.Errorf("credential %q not found. Run: harbor auth %s", missingCred.Name, missingCred.Name)
+			}
 			if err != nil {
 				return err
 			}
@@ -109,6 +128,39 @@ Examples:
 	cmd.MarkFlagRequired("auth")
 
 	return cmd
+}
+
+// credentialSetupURL generates a Harbor Cloud setup URL for a missing credential.
+// The URL includes the full API key as auth — the setup page uses it to store
+// the credential via PUT /api/credentials/:name.
+// Returns "" if the user has no cloud account and auto-provision fails.
+func credentialSetupURL(credName string) string {
+	cfg, err := cloudauth.Load()
+	if err != nil {
+		// Try auto-provision.
+		if _, provErr := cloudauth.AutoProvision(); provErr != nil {
+			return ""
+		}
+		cfg, err = cloudauth.Load()
+		if err != nil {
+			return ""
+		}
+	}
+	return cfg.Endpoint + "/setup/" + credName
+}
+
+// openBrowser opens a URL in the user's default browser.
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	default:
+		cmd = exec.Command("open", url)
+	}
+	_ = cmd.Start()
 }
 
 // parseHeader splits "Name: Value" into key and value.

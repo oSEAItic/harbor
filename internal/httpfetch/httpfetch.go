@@ -20,6 +20,19 @@ import (
 
 const defaultTimeout = 30 * time.Second
 
+// MissingCredentialError is returned when a credential is not found in the keychain.
+// The CLI layer uses this to trigger the interactive setup flow (browser-based or prompt).
+type MissingCredentialError struct {
+	Name  string // credential name (e.g. "tavily")
+	Cause error
+}
+
+func (e *MissingCredentialError) Error() string {
+	return fmt.Sprintf("credential %q not found: %v", e.Name, e.Cause)
+}
+
+func (e *MissingCredentialError) Unwrap() error { return e.Cause }
+
 // Options configures an HTTP fetch through Harbor's auth proxy.
 type Options struct {
 	URL        string            // Full URL to fetch
@@ -55,7 +68,9 @@ func Fetch(ctx context.Context, opts Options) (*Result, error) {
 	// Retrieve credential from keychain
 	secret, err := auth.Retrieve(opts.AuthName)
 	if err != nil {
-		return nil, fmt.Errorf("credential %q: %w (run 'harbor auth %s' to store it)", opts.AuthName, err, opts.AuthName)
+		// Credential not found — return error with setup hint.
+		// The CLI layer (fetch.go) handles the interactive setup flow.
+		return nil, &MissingCredentialError{Name: opts.AuthName, Cause: err}
 	}
 
 	// Build HTTP request

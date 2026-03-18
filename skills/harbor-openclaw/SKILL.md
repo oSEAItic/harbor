@@ -177,10 +177,80 @@ The plugin:
 - Captures context before compaction (prevents memory loss)
 - Auto-provisions a free cloud account (50 memories, opt out with `harbor cloud disable`)
 
+## Build Tools with Harbor (for skill/plugin authors)
+
+Use `harbor fetch` as your HTTP layer — get credential isolation, memory, and schema learning for free. Your tool code never touches raw API keys.
+
+### Example: Tavily search tool (5 lines)
+
+```typescript
+// tavily-tool.ts — community-built OpenClaw tool using Harbor
+export const tavily_search = {
+  name: "tavily_search",
+  description: "Web search via Tavily (credential-isolated through Harbor)",
+  parameters: {
+    type: "object",
+    required: ["query"],
+    properties: { query: { type: "string" } },
+  },
+  async execute({ query }: { query: string }) {
+    const { execSync } = require("node:child_process");
+    const body = JSON.stringify({ query, max_results: 5 });
+    const raw = execSync(
+      `harbor fetch https://api.tavily.com/search --auth tavily -d '${body}'`,
+      { encoding: "utf-8", timeout: 15000 },
+    );
+    return JSON.parse(raw);
+  },
+};
+```
+
+User setup (one-time): `harbor auth tavily` → paste Tavily API key → done.
+
+### Example: Stripe balance tool
+
+```typescript
+export const stripe_balance = {
+  name: "stripe_balance",
+  description: "Check Stripe account balance (credential-isolated)",
+  parameters: { type: "object", properties: {} },
+  async execute() {
+    const { execSync } = require("node:child_process");
+    return JSON.parse(execSync(
+      "harbor fetch https://api.stripe.com/v1/balance --auth stripe",
+      { encoding: "utf-8" },
+    ));
+  },
+};
+```
+
+### Why `harbor fetch` instead of raw `fetch`?
+
+| | `harbor fetch` | Raw `fetch` |
+|---|---|---|
+| **API key** | In Harbor keychain, never in code | In env var, any skill can read |
+| **Memory** | Responses auto-cached, recalled next session | None |
+| **Schema learning** | Auto-curates to relevant fields | Raw 47-field JSON |
+| **Auth header** | Harbor injects automatically | You handle it |
+| **Multi-API** | Same pattern for any API | Different auth per API |
+
+### Pattern for any API
+
+```bash
+# 1. User stores credential (once)
+harbor auth <name>
+
+# 2. Tool calls through Harbor
+harbor fetch <url> --auth <name> [-d '<body>'] [--auth-header "X-API-Key"]
+```
+
+That's it. Write the tool, tell users to `harbor auth <name>`, and Harbor handles the rest.
+
 ## Why Harbor for OpenClaw
 
 OpenClaw skills currently access API keys via environment variables — any installed skill can read any credential. Harbor fixes this:
 
-1. **Credential isolation** — API keys live in Harbor's encrypted keychain, not env vars. Skills call `harbor_http` and never see raw keys.
+1. **Credential isolation** — API keys live in Harbor's encrypted keychain, not env vars. Skills call `harbor fetch` and never see raw keys.
 2. **Cross-session memory** — Your analysis persists. Next time you (or another skill) access the same data source, previous conclusions are auto-injected.
 3. **Schema learning** — APIs return 47 fields, you use 3. Harbor learns and curates permanently.
+4. **Tool platform** — Any developer can build credential-isolated tools with `harbor fetch`. One pattern, any API.

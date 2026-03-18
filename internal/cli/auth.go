@@ -87,18 +87,28 @@ func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
 		target = fmt.Sprintf("Harbor Cloud (%s)", cfg.Endpoint)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Storing credential for: %s\n", connector)
-	fmt.Fprintf(cmd.OutOrStdout(), "Target: %s\n", target)
-	if useCloud {
-		fmt.Fprintln(cmd.OutOrStdout(), "         Use --local to store in OS keychain instead.")
+	// Show setup URL option — user can paste key in browser instead of terminal.
+	setupURL := credentialSetupURL(connector)
+	if setupURL != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Storing credential for: %s\n", connector)
+		fmt.Fprintf(cmd.OutOrStdout(), "Target: %s\n\n", target)
+		fmt.Fprintf(cmd.OutOrStdout(), "Option 1 — Open browser: %s\n", setupURL)
+		fmt.Fprintf(cmd.OutOrStdout(), "Option 2 — Paste key below\n\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Press Enter to open browser, or paste your key directly:\n")
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Storing credential for: %s\n", connector)
+		fmt.Fprintf(cmd.OutOrStdout(), "Target: %s\n\n", target)
 	}
-	fmt.Fprintln(cmd.OutOrStdout())
 
-	credential, err := promptSecret("Connector API key")
+	credential, err := promptSecretOrOpen(setupURL)
 	if err != nil {
 		return fmt.Errorf("reading credential: %w", err)
 	}
 	if credential == "" {
+		if setupURL != "" {
+			fmt.Fprintln(cmd.OutOrStdout(), "Opened browser. Save your key there, then re-run your tool.")
+			return nil
+		}
 		return fmt.Errorf("credential is required")
 	}
 
@@ -329,6 +339,35 @@ func authList(cmd *cobra.Command) error {
 	}
 
 	return nil
+}
+
+// promptSecretOrOpen reads a secret from the terminal without echo.
+// If the user presses Enter without input and setupURL is set, opens browser.
+// Returns empty string if user chose browser (caller should exit gracefully).
+func promptSecretOrOpen(setupURL string) (string, error) {
+	if !term.IsTerminal(int(syscall.Stdin)) {
+		// Non-terminal fallback (piped input / tests)
+		var line string
+		_, err := fmt.Scanln(&line)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(line), nil
+	}
+
+	secret, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	if err != nil {
+		return "", err
+	}
+
+	val := strings.TrimSpace(string(secret))
+	if val == "" && setupURL != "" {
+		// User pressed Enter without typing → open browser.
+		openBrowser(setupURL)
+		return "", nil
+	}
+	return val, nil
 }
 
 // promptSecret reads a secret from the terminal without echo.

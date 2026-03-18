@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 
@@ -82,18 +83,26 @@ Examples:
 			var missingCred *httpfetch.MissingCredentialError
 			if errors.As(err, &missingCred) {
 				setupURL := credentialSetupURL(missingCred.Name)
-				// Best-effort: try opening browser (works for local CLI users).
-				if setupURL != "" {
+
+				// Interactive prompt (like gcloud auth / npm login):
+				// show link, press Enter to open. Non-interactive (agent/pipe)
+				// skips straight to JSON output.
+				if setupURL != "" && isInteractive() {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Credential %q not configured.\n", missingCred.Name)
+					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Set it up here: %s\n", setupURL)
+					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Press Enter to open in browser, or Ctrl+C to skip...\n")
+					fmt.Scanln()
 					openBrowser(setupURL)
 				}
+
 				// Always output structured JSON — agents parse this.
 				setup := map[string]interface{}{
-					"error":      "credential_not_found",
-					"credential": missingCred.Name,
-					"message":    fmt.Sprintf("Credential %q is not configured. The user needs to set it up before this tool can work.", missingCred.Name),
-					"setup_url":  setupURL,
+					"error":       "credential_not_found",
+					"credential":  missingCred.Name,
+					"message":     fmt.Sprintf("Credential %q is not configured. The user needs to set it up before this tool can work.", missingCred.Name),
+					"setup_url":   setupURL,
 					"cli_command": fmt.Sprintf("harbor auth %s", missingCred.Name),
-					"action":     "Show the setup_url to the user and ask them to configure their API key.",
+					"action":      "Show the setup_url to the user and ask them to configure their API key.",
 				}
 				out, _ := json.MarshalIndent(setup, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
@@ -169,6 +178,15 @@ func openBrowser(url string) {
 		cmd = exec.Command("open", url)
 	}
 	_ = cmd.Start()
+}
+
+// isInteractive returns true if stdin is a terminal (not a pipe or agent).
+func isInteractive() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 // parseHeader splits "Name: Value" into key and value.

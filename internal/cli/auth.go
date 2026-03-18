@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"syscall"
@@ -62,6 +63,22 @@ Examples:
 // If logged in and not --local: encrypts client-side and stores in cloud.
 // Otherwise: stores in local OS keychain.
 func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
+	// Non-interactive (agent/pipe): return setup URL as JSON instead of prompting.
+	if !isInteractive() {
+		setupURL := credentialSetupURL(connector)
+		setup := map[string]interface{}{
+			"error":       "interactive_required",
+			"credential":  connector,
+			"message":     fmt.Sprintf("Credential %q requires interactive setup. Share the setup_url with the user.", connector),
+			"setup_url":   setupURL,
+			"cli_command": fmt.Sprintf("harbor auth %s", connector),
+			"action":      "Show the setup_url to the user and ask them to run the cli_command in their terminal.",
+		}
+		out, _ := json.MarshalIndent(setup, "", "  ")
+		fmt.Fprintln(cmd.OutOrStdout(), string(out))
+		return nil
+	}
+
 	cfg, loginErr := cloudauth.Load()
 	useCloud := loginErr == nil && !forceLocal
 

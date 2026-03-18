@@ -148,13 +148,19 @@ Examples:
 }
 
 // credentialSetupURL returns the frontend setup URL for a missing credential.
+// Includes the API key as a hash fragment (never sent to server/logs).
 // Best-effort auto-provisions a cloud account if none exists.
 func credentialSetupURL(credName string) string {
-	if _, err := cloudauth.Load(); err != nil {
-		// Try auto-provision so the user has a cloud account ready.
+	cfg, err := cloudauth.Load()
+	if err != nil {
 		cloudauth.AutoProvision()
+		cfg, _ = cloudauth.Load()
 	}
-	return "https://harbor.oseaitic.com/setup?credential=" + credName
+	url := "https://harbor.oseaitic.com/setup?credential=" + credName
+	if cfg != nil && cfg.APIKey != "" {
+		url += "#key=" + cfg.APIKey
+	}
+	return url
 }
 
 // openBrowser opens a URL in the user's default browser.

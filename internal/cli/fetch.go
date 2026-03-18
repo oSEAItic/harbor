@@ -77,19 +77,27 @@ Examples:
 				AuthHeader: authHeader,
 			})
 
-			// If credential is missing, offer browser-based setup.
+			// If credential is missing, return setup URL as structured output
+			// so agents can relay it to the user.
 			var missingCred *httpfetch.MissingCredentialError
 			if errors.As(err, &missingCred) {
 				setupURL := credentialSetupURL(missingCred.Name)
+				// Best-effort: try opening browser (works for local CLI users).
 				if setupURL != "" {
-					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Credential %q not found. Opening setup page...\n", missingCred.Name)
 					openBrowser(setupURL)
-					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] After saving your key, re-run this command.\n")
-					fmt.Fprintf(cmd.ErrOrStderr(), "[harbor] Or run: harbor auth %s\n", missingCred.Name)
-					return nil
 				}
-				// No cloud account — fall back to CLI hint.
-				return fmt.Errorf("credential %q not found. Run: harbor auth %s", missingCred.Name, missingCred.Name)
+				// Always output structured JSON — agents parse this.
+				setup := map[string]interface{}{
+					"error":      "credential_not_found",
+					"credential": missingCred.Name,
+					"message":    fmt.Sprintf("Credential %q is not configured. The user needs to set it up before this tool can work.", missingCred.Name),
+					"setup_url":  setupURL,
+					"cli_command": fmt.Sprintf("harbor auth %s", missingCred.Name),
+					"action":     "Show the setup_url to the user and ask them to configure their API key.",
+				}
+				out, _ := json.MarshalIndent(setup, "", "  ")
+				fmt.Fprintln(cmd.OutOrStdout(), string(out))
+				return nil
 			}
 			if err != nil {
 				return err

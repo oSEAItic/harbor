@@ -1,5 +1,5 @@
 {
-  "id": "harbor",
+  "id": "harbor-openclaw",
   "name": "Harbor Memory",
   "description": "Cross-session curated memory, cross-device sync, and knowledge graph for OpenClaw agents",
   "version": "0.1.0",

@@ -217,7 +217,7 @@ type PluginConfig = {
 };
 
 const harborPlugin = {
-  id: "harbor",
+  id: "harbor-openclaw",
   name: "Harbor Memory",
   description: "Cross-session curated memory, cross-device sync, and knowledge graph",
 

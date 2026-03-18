@@ -173,6 +173,68 @@ def exec_cli(
     return text
 
 
+# ── harborFetch — auth-proxied HTTP via Harbor ──────────────────
+
+
+def harbor_fetch(
+    url: str,
+    *,
+    auth: str,
+    method: Optional[str] = None,
+    body: Optional[Any] = None,
+    auth_header: Optional[str] = None,
+    headers: Optional[dict[str, str]] = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    """Make an auth-proxied HTTP request through Harbor.
+
+    Harbor injects the credential from its keychain — the calling code
+    never sees the raw API key. Responses go through Harbor's pipeline
+    (memory, schema learning, context injection).
+
+    Example — Tavily search (key stored via ``harbor auth tavily``)::
+
+        result = harbor_fetch(
+            "https://api.tavily.com/search",
+            auth="tavily",
+            body={"query": "AI agent memory", "max_results": 5},
+        )
+
+    Example — GitHub API (key stored via ``harbor auth github-pat``)::
+
+        repos = harbor_fetch(
+            "https://api.github.com/user/repos",
+            auth="github-pat",
+        )
+
+    Returns a dict with ``status``, ``data``, and ``from_memory`` keys.
+    """
+    args = ["fetch", url, "--auth", auth]
+
+    if method:
+        args.extend(["-X", method])
+    if auth_header:
+        args.extend(["--auth-header", auth_header])
+    if body is not None:
+        body_str = body if isinstance(body, str) else json.dumps(body)
+        args.extend(["-d", body_str])
+    if headers:
+        for k, v in headers.items():
+            args.extend(["-H", f"{k}: {v}"])
+
+    result = exec_cli("harbor", args, timeout=timeout, parse_json=True)
+
+    # Harbor fetch returns a standard HarborResponse envelope.
+    if isinstance(result, dict):
+        meta = result.get("meta", {})
+        return {
+            "status": 200,
+            "data": result.get("data", result),
+            "from_memory": bool(meta.get("from_memory")),
+        }
+    return {"status": 200, "data": result, "from_memory": False}
+
+
 # ── Describe helper ─────────────────────────────────────────────
 
 def handle_describe(schemas: list[dict]) -> bool:

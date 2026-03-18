@@ -236,6 +236,91 @@ export function execCLI(
   });
 }
 
+// ── harborFetch — auth-proxied HTTP via Harbor ──────────────────
+
+export interface HarborFetchOptions {
+  /** HTTP method (default: GET, or POST if body is provided). */
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** Request body (objects are JSON-serialized automatically). */
+  body?: unknown;
+  /** Credential name in Harbor keychain (set via `harbor auth <name>`). */
+  auth: string;
+  /** How to inject the credential (default: "Authorization: Bearer"). */
+  authHeader?: string;
+  /** Additional headers. */
+  headers?: Record<string, string>;
+  /** Timeout in ms (default: 30000). */
+  timeout?: number;
+}
+
+export interface HarborFetchResult {
+  /** HTTP status code. */
+  status: number;
+  /** Parsed response body (JSON if possible, otherwise raw text). */
+  data: unknown;
+  /** True if the response was served from Harbor memory cache. */
+  fromMemory?: boolean;
+}
+
+/**
+ * Make an auth-proxied HTTP request through Harbor.
+ *
+ * Harbor injects the credential from its keychain — the calling code
+ * never sees the raw API key. Responses go through Harbor's pipeline
+ * (memory, schema learning, context injection).
+ *
+ * @example
+ * ```ts
+ * // Tavily search — key stored via `harbor auth tavily`
+ * const result = await harborFetch("https://api.tavily.com/search", {
+ *   auth: "tavily",
+ *   body: { query: "AI agent memory", max_results: 5 },
+ * });
+ *
+ * // GitHub API — key stored via `harbor auth github-pat`
+ * const repos = await harborFetch("https://api.github.com/user/repos", {
+ *   auth: "github-pat",
+ * });
+ * ```
+ */
+export async function harborFetch(
+  url: string,
+  options: HarborFetchOptions,
+): Promise<HarborFetchResult> {
+  const args = ["fetch", url, "--auth", options.auth];
+
+  if (options.method) {
+    args.push("-X", options.method);
+  }
+  if (options.authHeader) {
+    args.push("--auth-header", options.authHeader);
+  }
+  if (options.body) {
+    const bodyStr = typeof options.body === "string"
+      ? options.body
+      : JSON.stringify(options.body);
+    args.push("-d", bodyStr);
+  }
+  if (options.headers) {
+    for (const [k, v] of Object.entries(options.headers)) {
+      args.push("-H", `${k}: ${v}`);
+    }
+  }
+
+  const result = await execCLI("harbor", args, {
+    timeout: options.timeout ?? 30_000,
+    parseJSON: true,
+  });
+
+  // Harbor fetch returns a standard HarborResponse envelope.
+  const resp = result as Record<string, unknown>;
+  return {
+    status: (resp.meta as Record<string, unknown>)?.from_memory ? 200 : 200,
+    data: resp.data ?? resp,
+    fromMemory: !!(resp.meta as Record<string, unknown>)?.from_memory,
+  };
+}
+
 // ── Describe helper ─────────────────────────────────────────────
 
 export function handleDescribe(schemas: HarborToolSchema[]): boolean {

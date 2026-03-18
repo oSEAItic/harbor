@@ -15,6 +15,55 @@ import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+// ── harborFetch — exported for community tools ──────────────────────
+
+export interface HarborFetchOptions {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  body?: unknown;
+  auth: string;
+  authHeader?: string;
+  headers?: Record<string, string>;
+}
+
+/**
+ * Auth-proxied HTTP via Harbor. Use this in your OpenClaw tools —
+ * Harbor injects the credential from its keychain, the tool code
+ * never sees the raw API key.
+ *
+ * @example
+ * ```ts
+ * import { harborFetch } from "@harbor/openclaw-plugin";
+ *
+ * const result = await harborFetch("https://api.tavily.com/search", {
+ *   auth: "tavily",
+ *   body: { query: "AI agent memory", max_results: 5 },
+ * });
+ * ```
+ */
+export function harborFetch(url: string, options: HarborFetchOptions): Record<string, unknown> | null {
+  const args: string[] = ["fetch", url, "--auth", options.auth];
+
+  if (options.method) args.push("-X", options.method);
+  if (options.authHeader) args.push("--auth-header", options.authHeader);
+  if (options.body) {
+    const bodyStr = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
+    args.push("-d", bodyStr);
+  }
+  if (options.headers) {
+    for (const [k, v] of Object.entries(options.headers)) {
+      args.push("-H", `${k}: ${v}`);
+    }
+  }
+
+  const raw = harborExec(args.join(" "));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { data: raw };
+  }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function harborExec(args: string): string | null {

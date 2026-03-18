@@ -138,6 +138,35 @@ func OptOut() error {
 	return os.WriteFile(OptOutPath(), []byte("opted out of cloud sync\n"), 0o600)
 }
 
+// RequestSetupToken gets a short-lived setup token (5 min) from Harbor Cloud.
+// Used for browser-based credential setup — token is scoped to credential write.
+func RequestSetupToken(cfg *Config) (string, error) {
+	req, err := http.NewRequest(http.MethodPost, cfg.Endpoint+"/api/auth/setup-token", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("X-API-Key", cfg.APIKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result.Token, nil
+}
+
 // ClearOptOut removes the opt-out marker file.
 func ClearOptOut() error {
 	err := os.Remove(OptOutPath())

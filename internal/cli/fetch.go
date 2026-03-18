@@ -147,20 +147,24 @@ Examples:
 	return cmd
 }
 
-// credentialSetupURL returns the frontend setup URL for a missing credential.
-// Includes the API key as a hash fragment (never sent to server/logs).
-// Best-effort auto-provisions a cloud account if none exists.
+// credentialSetupURL returns a frontend setup URL with a short-lived token.
+// The token is scoped to credential write and expires in 5 minutes.
 func credentialSetupURL(credName string) string {
 	cfg, err := cloudauth.Load()
 	if err != nil {
 		cloudauth.AutoProvision()
 		cfg, _ = cloudauth.Load()
 	}
-	url := "https://harbor.oseaitic.com/setup?credential=" + credName
-	if cfg != nil && cfg.APIKey != "" {
-		url += "#key=" + cfg.APIKey
+	if cfg == nil {
+		return "https://harbor.oseaitic.com/setup?credential=" + credName
 	}
-	return url
+
+	// Request a short-lived setup token from cloud.
+	token, err := cloudauth.RequestSetupToken(cfg)
+	if err != nil {
+		return "https://harbor.oseaitic.com/setup?credential=" + credName
+	}
+	return "https://harbor.oseaitic.com/setup?credential=" + credName + "&token=" + token
 }
 
 // openBrowser opens a URL in the user's default browser.

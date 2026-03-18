@@ -1,6 +1,7 @@
 # Build outputs
 bin/
 dist/
+!sdk/typescript/dist/
 /harbor
 
 # Compiled binaries

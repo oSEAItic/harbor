@@ -146,7 +146,7 @@ func credentialSetupURL(credName string) string {
 			return ""
 		}
 	}
-	return cfg.Endpoint + "/setup/" + credName
+	return cfg.Endpoint + "/setup?credential=" + credName
 }
 
 // openBrowser opens a URL in the user's default browser.

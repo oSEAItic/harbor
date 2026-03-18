@@ -147,23 +147,14 @@ Examples:
 	return cmd
 }
 
-// credentialSetupURL generates a Harbor Cloud setup URL for a missing credential.
-// The URL includes the full API key as auth — the setup page uses it to store
-// the credential via PUT /api/credentials/:name.
-// Returns "" if the user has no cloud account and auto-provision fails.
+// credentialSetupURL returns the frontend setup URL for a missing credential.
+// Best-effort auto-provisions a cloud account if none exists.
 func credentialSetupURL(credName string) string {
-	cfg, err := cloudauth.Load()
-	if err != nil {
-		// Try auto-provision.
-		if _, provErr := cloudauth.AutoProvision(); provErr != nil {
-			return ""
-		}
-		cfg, err = cloudauth.Load()
-		if err != nil {
-			return ""
-		}
+	if _, err := cloudauth.Load(); err != nil {
+		// Try auto-provision so the user has a cloud account ready.
+		cloudauth.AutoProvision()
 	}
-	return cfg.Endpoint + "/setup?credential=" + credName
+	return "https://harbor.oseaitic.com/setup?credential=" + credName
 }
 
 // openBrowser opens a URL in the user's default browser.

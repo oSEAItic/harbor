@@ -52,6 +52,7 @@ Examples:
 	cmd.Flags().Bool("local", false, "Force store in local OS keychain instead of cloud")
 
 	cmd.AddCommand(newAuthListCmd())
+	cmd.AddCommand(newAuthGetCmd())
 	cmd.AddCommand(newAuthSyncCmd())
 	cmd.AddCommand(newAuthStatusCmd())
 	cmd.AddCommand(newAuthDeleteCmd())
@@ -138,6 +139,33 @@ func authStore(cmd *cobra.Command, connector string, forceLocal bool) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Credential stored in OS keychain for %s.\n", connector)
 	return nil
+}
+
+// newAuthGetCmd returns the 'harbor auth get <name>' subcommand.
+// Outputs the raw credential to stdout — for tools/scripts that need the key.
+func newAuthGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <name>",
+		Short: "Output a stored credential to stdout (for tool integration)",
+		Long: `Retrieve a credential from Harbor's keychain and print it to stdout.
+
+This is the agent-native way to use Harbor credentials — the tool
+decides how to use the key (header, body, query param, etc.).
+
+Example:
+  harbor auth get tavily                    # prints the raw key
+  curl -X POST api.tavily.com/search \
+    -d "{\"api_key\": \"$(harbor auth get tavily)\", \"query\": \"test\"}"`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			secret, err := auth.Retrieve(args[0])
+			if err != nil {
+				return fmt.Errorf("credential %q not found: %w", args[0], err)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), secret)
+			return nil
+		},
+	}
 }
 
 // newAuthListCmd returns the 'harbor auth list' subcommand.

@@ -152,6 +152,8 @@ harbor remember --connector <name> <topic> "summary"       # Scoped to connector
 harbor forget mem_xxx                                      # Delete memory
 harbor recall --search "keyword"                          # Search memory
 harbor auth <name>                                        # Store credential
+harbor auth get <name>                                    # Retrieve credential (stdout)
+harbor auth sync                                          # Sync cloud → local
 harbor doctor --json                                      # Diagnostics
 ```
 
@@ -181,10 +183,16 @@ The plugin:
 
 Use `harbor fetch` as your HTTP layer — get credential isolation, memory, and schema learning for free. Your tool code never touches raw API keys.
 
-### Example: Tavily search tool (5 lines)
+Harbor provides two ways to use credentials in tools:
+
+| Mode | Use when | Command |
+|------|----------|---------|
+| `harbor auth get` | API key goes in body, query param, or custom format | Tool gets raw key, decides injection |
+| `harbor fetch --auth` | API key goes in HTTP header (most REST APIs) | Harbor injects automatically |
+
+### Example: Tavily search (key in body — use `harbor auth get`)
 
 ```typescript
-// tavily-tool.ts — community-built OpenClaw tool using Harbor
 export const tavily_search = {
   name: "tavily_search",
   description: "Web search via Tavily (credential-isolated through Harbor)",
@@ -195,44 +203,63 @@ export const tavily_search = {
   },
   async execute({ query }: { query: string }) {
     const { execSync } = require("node:child_process");
-    const body = JSON.stringify({ query, max_results: 5 });
-    const raw = execSync(
-      `harbor fetch https://api.tavily.com/search --auth tavily -d '${body}'`,
-      { encoding: "utf-8", timeout: 15000 },
-    );
-    return JSON.parse(raw);
+    const key = execSync("harbor auth get tavily", { encoding: "utf-8" });
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: key, query, max_results: 5 }),
+    });
+    return res.json();
   },
 };
 ```
 
-User setup (one-time): `harbor auth tavily` → paste Tavily API key → done.
-
-### Example: Stripe balance tool
+### Example: GitHub API (key in header — use `harbor fetch`)
 
 ```typescript
-export const stripe_balance = {
-  name: "stripe_balance",
-  description: "Check Stripe account balance (credential-isolated)",
+export const github_repos = {
+  name: "github_repos",
+  description: "List GitHub repos (credential-isolated)",
   parameters: { type: "object", properties: {} },
   async execute() {
     const { execSync } = require("node:child_process");
     return JSON.parse(execSync(
-      "harbor fetch https://api.stripe.com/v1/balance --auth stripe",
+      "harbor fetch https://api.github.com/user/repos --auth github-pat",
       { encoding: "utf-8" },
     ));
   },
 };
 ```
 
-### Why `harbor fetch` instead of raw `fetch`?
+### Example: Stripe (key in header, custom format)
 
-| | `harbor fetch` | Raw `fetch` |
+```typescript
+export const stripe_balance = {
+  name: "stripe_balance",
+  description: "Check Stripe balance (credential-isolated)",
+  parameters: { type: "object", properties: {} },
+  async execute() {
+    const { execSync } = require("node:child_process");
+    const key = execSync("harbor auth get stripe", { encoding: "utf-8" });
+    const res = await fetch("https://api.stripe.com/v1/balance", {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    return res.json();
+  },
+};
+```
+
+User setup (one-time): `harbor auth <name>` → paste key → done.
+
+### Why use Harbor for credentials?
+
+| | Harbor | Raw env vars |
 |---|---|---|
-| **API key** | In Harbor keychain, never in code | In env var, any skill can read |
-| **Memory** | Responses auto-cached, recalled next session | None |
-| **Schema learning** | Auto-curates to relevant fields | Raw 47-field JSON |
-| **Auth header** | Harbor injects automatically | You handle it |
-| **Multi-API** | Same pattern for any API | Different auth per API |
+| **API key** | Encrypted keychain, never in code | In env var, any skill can read |
+| **Access** | `harbor auth get` or `harbor fetch --auth` | `process.env.XXX` |
+| **Security** | Per-credential isolation | All skills see all vars |
+| **Setup** | `harbor auth <name>` or browser setup page | Edit .env, restart |
+| **Cross-device** | Cloud sync | Manual copy |
 
 ### Pattern for any API
 
@@ -240,11 +267,12 @@ export const stripe_balance = {
 # 1. User stores credential (once)
 harbor auth <name>
 
-# 2. Tool calls through Harbor
-harbor fetch <url> --auth <name> [-d '<body>'] [--auth-header "X-API-Key"]
-```
+# 2. Tool retrieves key (any injection format)
+harbor auth get <name>              # raw key to stdout
 
-That's it. Write the tool, tell users to `harbor auth <name>`, and Harbor handles the rest.
+# 3. Or let Harbor inject into header automatically
+harbor fetch <url> --auth <name>    # header-based APIs
+```
 
 ## Why Harbor for OpenClaw
 

@@ -228,9 +228,29 @@ harbor forget --topic ws-reconnect             # Delete by topic
 harbor forget --connector kuse-hive --confirm  # Bulk delete
 ```
 
-### Credential injection
+### Credential management
 
-Inject API keys from the OS keychain — secrets never appear in config files:
+Store API keys in Harbor's encrypted keychain — tools never see raw secrets:
+
+```bash
+harbor auth tavily                 # Store credential (interactive or browser setup)
+harbor auth get tavily             # Retrieve for tool use (stdout)
+harbor auth sync                   # Sync cloud → local keychain
+harbor auth list                   # List all stored credentials
+```
+
+Two modes for tools:
+
+```bash
+# Header-based APIs (most REST APIs) — Harbor injects automatically
+harbor fetch https://api.github.com/user --auth github-pat
+
+# Body/custom APIs — tool retrieves key, decides injection format
+KEY=$(harbor auth get tavily)
+curl -X POST api.tavily.com/search -d "{\"api_key\":\"$KEY\",\"query\":\"test\"}"
+```
+
+Inject into MCP proxy:
 
 ```json
 {

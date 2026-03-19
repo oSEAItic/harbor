@@ -216,9 +216,29 @@ harbor forget --topic ws-reconnect             # 按主题删除
 harbor forget --connector kuse-hive --confirm  # 批量删除
 ```
 
-### 凭证注入
+### 凭证管理
 
-从操作系统钥匙串注入 API Key —— 密钥不会出现在配置文件中：
+API Key 存储在 Harbor 加密钥匙串中 —— Tool 永远不接触原始密钥：
+
+```bash
+harbor auth tavily                 # 存储凭证（交互式或浏览器设置）
+harbor auth get tavily             # 取出凭证给 tool 用（stdout）
+harbor auth sync                   # 云端 → 本地同步
+harbor auth list                   # 列出所有已存凭证
+```
+
+两种 tool 接入方式：
+
+```bash
+# Header 类 API（大多数 REST API）—— Harbor 自动注入
+harbor fetch https://api.github.com/user --auth github-pat
+
+# Body/自定义格式 API —— tool 取出 key，自己决定注入方式
+KEY=$(harbor auth get tavily)
+curl -X POST api.tavily.com/search -d "{\"api_key\":\"$KEY\",\"query\":\"test\"}"
+```
+
+注入到 MCP proxy：
 
 ```json
 {

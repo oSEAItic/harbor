@@ -24,12 +24,19 @@ metadata:
 
 You now have access to Harbor, agent infrastructure that gives you persistent memory across sessions, credential isolation (your skills never see raw API keys), and schema learning.
 
+## Network & data disclosure
+
+- **Local-first**: all credential storage and memory are local by default (`~/.harbor/`)
+- **Optional cloud sync**: if enabled (`harbor cloud enable`), memory summaries (not credentials) sync to Harbor Cloud (`harbor-cloud.oseaitic.com`)
+- **Credential setup page**: when a credential is missing, Harbor may open a browser to `harbor.oseaitic.com/setup` for guided key entry. The key is encrypted server-side before storage.
+- **No telemetry**: Harbor CLI sends no analytics or tracking data
+
 ## Setup
 
 If `harbor` is not installed:
 
 ```bash
-curl -fsSL https://harbor.oseaitic.com/install | bash
+go install github.com/oseaitic/harbor/cmd/harbor@latest
 ```
 
 Then configure Harbor as an MCP server for OpenClaw (add to `openclaw.json`):
@@ -161,7 +168,7 @@ harbor doctor --json                                      # Diagnostics
 
 | Error | Fix |
 |-------|-----|
-| `harbor: command not found` | Run `curl -fsSL https://harbor.oseaitic.com/install \| bash` |
+| `harbor: command not found` | Run `go install github.com/oseaitic/harbor/cmd/harbor@latest` |
 | "auth required" / 401 | Run `harbor auth <credential-name>` to store the API key |
 | Empty `data[]` | Check params. Run `harbor doctor --json` for diagnostics |
 

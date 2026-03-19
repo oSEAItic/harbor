@@ -88,21 +88,31 @@ func List() []KeyEntry {
 	return valid
 }
 
-// loadAPIKey reads the Harbor API key from ~/.harbor/cloud.json.
-// Returns "" if not logged in or the file cannot be read.
+// loadEncryptionKey reads the encryption key from ~/.harbor/cloud.json.
+// Prefers enc_key (stable, independent of API key rotation).
+// Falls back to api_key for backward compatibility.
 // Avoids importing cloudauth to prevent import cycles.
-func loadAPIKey() string {
+func loadEncryptionKey() string {
 	data, err := os.ReadFile(harborhome.Path("cloud.json"))
 	if err != nil {
 		return ""
 	}
 	var cfg struct {
+		EncKey string `json:"enc_key"`
 		APIKey string `json:"api_key"`
 	}
 	if json.Unmarshal(data, &cfg) != nil {
 		return ""
 	}
+	if cfg.EncKey != "" {
+		return cfg.EncKey
+	}
 	return cfg.APIKey
+}
+
+// loadAPIKey is an alias for backward compat (used by loadEncryptionKey internally).
+func loadAPIKey() string {
+	return loadEncryptionKey()
 }
 
 // --- index file helpers ---

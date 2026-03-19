@@ -2,10 +2,14 @@
 name: harbor
 description: >-
   Persistent cross-session memory, credential isolation, and schema learning
-  for your OpenClaw agent. Use Harbor when you need to: remember context across
-  sessions, call APIs without exposing credentials, reduce noisy API responses
-  to relevant fields, or share knowledge between agents. Also use when the user
-  mentions Harbor, agent memory, credential isolation, or schema learning.
+  for your OpenClaw agent. Stores data locally at ~/.harbor/ (memory, encrypted
+  keychain, config). Optional cloud sync to harbor-cloud.oseaitic.com for
+  cross-device access. No telemetry.
+license: Apache-2.0
+compatibility: >-
+  Requires macOS or Linux (amd64/arm64). Uses OS keychain (macOS Keychain /
+  Linux Secret Service) with file-based fallback. Writes to ~/.harbor/.
+  Optional network access to harbor-cloud.oseaitic.com (cloud sync, disabled by default).
 metadata:
   openclaw:
     requires:
@@ -17,7 +21,16 @@ metadata:
         bins: [harbor]
     emoji: "\u2693"
     homepage: https://harbor.oseaitic.com
+    repository: https://github.com/oSEAItic/harbor
     os: ["macos", "linux"]
+    configPaths: ["~/.harbor/"]
+    networkEndpoints:
+      - harbor-cloud.oseaitic.com (opt-in cloud sync)
+      - harbor.oseaitic.com (credential setup page, static)
+    permissions:
+      - filesystem: ~/.harbor/ (memory, keychain, config)
+      - keychain: OS keychain for credential storage
+      - network: optional, only when cloud sync enabled
 ---
 
 # Harbor — Persistent Memory & Credential Isolation for OpenClaw

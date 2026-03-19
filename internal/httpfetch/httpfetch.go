@@ -121,9 +121,11 @@ func Fetch(ctx context.Context, opts Options) (*Result, error) {
 		Data: rawData,
 		Raw:  rawData,
 		Meta: protocol.Meta{
-			Source:    connectorName,
-			FetchedAt: now,
-			RequestID: uuid.New().String(),
+			Source:           connectorName,
+			Schema:           connectorName + "." + resource + ".v1",
+			ConnectorVersion: "http-proxy",
+			FetchedAt:        now,
+			RequestID:        uuid.New().String(),
 		},
 		Errors: []protocol.ErrorDetail{},
 	}

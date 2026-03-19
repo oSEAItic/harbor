@@ -24,12 +24,41 @@ metadata:
 
 You now have access to Harbor, agent infrastructure that gives you persistent memory across sessions, credential isolation (your skills never see raw API keys), and schema learning.
 
-## Network & data disclosure
+## Security & data disclosure
 
-- **Local-first**: all credential storage and memory are local by default (`~/.harbor/`)
-- **Optional cloud sync**: if enabled (`harbor cloud enable`), memory summaries (not credentials) sync to Harbor Cloud (`harbor-cloud.oseaitic.com`)
-- **Credential setup page**: when a credential is missing, Harbor may open a browser to `harbor.oseaitic.com/setup` for guided key entry. The key is encrypted server-side before storage.
-- **No telemetry**: Harbor CLI sends no analytics or tracking data
+### Data storage
+- **Local-first**: all data stored at `~/.harbor/` (memory, keychain, config). Works fully offline.
+- **Credentials**: encrypted with AES-256-GCM (PBKDF2 key derivation, 100K iterations). OS keychain preferred, file-based keychain as fallback.
+
+### Network endpoints (only when cloud sync is enabled)
+| Endpoint | Purpose | Data sent |
+|----------|---------|-----------|
+| `harbor-cloud.oseaitic.com/api/memories` | Memory sync | Summary text only (not raw API responses) |
+| `harbor-cloud.oseaitic.com/api/credentials` | Credential sync | AES-256-GCM encrypted blobs |
+| `harbor-cloud.oseaitic.com/api/schemas` | Schema sync | Learned field schemas |
+| `harbor-cloud.oseaitic.com/api/auth/*` | Auth | Device fingerprint (hash), setup tokens |
+| `harbor.oseaitic.com/setup` | Credential setup page | Nothing (static page, key stays client-side or encrypted server-side) |
+
+No other endpoints are contacted. No telemetry, no analytics, no tracking.
+
+### Cloud sync is opt-in
+- Default: **fully local**, no network calls
+- `harbor cloud enable`: auto-provisions free account (50 memories)
+- `harbor cloud disable`: opts out permanently, deletes cloud config
+
+### Revoking access
+```bash
+harbor auth delete <name>          # Remove a credential (local + cloud)
+harbor forget --topic <topic>      # Delete memories by topic
+harbor forget mem_<id>             # Delete specific memory
+harbor cloud disable               # Disconnect from cloud entirely
+```
+
+### Verification
+- **Source**: [github.com/oSEAItic/harbor](https://github.com/oSEAItic/harbor) (Apache 2.0)
+- **Install**: `go install` builds from source (auditable, reproducible)
+- **Releases**: signed tags on GitHub (`git tag -v v0.4.9`)
+- **Hosting**: Harbor Cloud runs on Fly.io (Singapore region), DB on Neon (Postgres)
 
 ## Setup
 

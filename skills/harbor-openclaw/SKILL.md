@@ -1,5 +1,5 @@
 ---
-name: harbor
+name: harbor-openclaw
 description: >-
   Persistent cross-session memory, credential isolation, and schema learning
   for your OpenClaw agent. Stores data locally at ~/.harbor/ (memory, encrypted
@@ -56,8 +56,9 @@ No other endpoints are contacted. No telemetry, no analytics, no tracking.
 
 ### Cloud sync is opt-in
 - Default: **fully local**, no network calls
-- `harbor cloud enable`: auto-provisions free account (50 memories)
+- `harbor cloud enable`: provisions free account (50 memories) for cross-device sync
 - `harbor cloud disable`: opts out permanently, deletes cloud config
+- **Plugin behavior**: creates a cloud account on first load (for credential setup page to work), but **no data is synced until you actively call `harbor remember`**. The account alone does not transmit any user data.
 
 ### Revoking access
 ```bash
@@ -226,7 +227,7 @@ The plugin:
 - Registers `harbor_remember` + `harbor_recall` as native OpenClaw agent tools
 - Syncs Harbor context to your workspace on session start (auto-indexed by OpenClaw)
 - Captures context before compaction (prevents memory loss)
-- Auto-provisions a free cloud account (50 memories, opt out with `harbor cloud disable`)
+- Creates a cloud account on first load (enables credential setup page). **No data synced until you call `harbor remember`**. Opt out: `harbor cloud disable`
 
 ## Build Tools with Harbor (for skill/plugin authors)
 

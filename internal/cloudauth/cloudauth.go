@@ -80,6 +80,14 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("cloud config is incomplete (missing endpoint or api_key)")
 	}
 
+	// Lazy backfill: fetch enc_key if missing (for accounts created before v0.4.6).
+	if cfg.EncKey == "" {
+		if encKey, err := fetchEncKey(cfg.Endpoint, cfg.APIKey); err == nil && encKey != "" {
+			cfg.EncKey = encKey
+			_ = Save(cfg) // best-effort persist
+		}
+	}
+
 	return &cfg, nil
 }
 
@@ -115,11 +123,42 @@ func AutoProvision() (string, error) {
 		APIKey:    result.APIKey,
 		CreatedAt: time.Now().UTC(),
 	}
+
+	// Fetch enc_key from /api/me so credential encryption matches.
+	if encKey, err := fetchEncKey(cfg.Endpoint, cfg.APIKey); err == nil && encKey != "" {
+		cfg.EncKey = encKey
+	}
+
 	if err := Save(cfg); err != nil {
 		return "", fmt.Errorf("saving config: %w", err)
 	}
 
 	return result.APIKey, nil
+}
+
+// fetchEncKey calls GET /api/me to retrieve the stable per-user encryption key.
+func fetchEncKey(endpoint, apiKey string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/me", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("X-API-Key", apiKey)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+	var me struct {
+		EncKey string `json:"enc_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
+		return "", err
+	}
+	return me.EncKey, nil
 }
 
 // OptOutPath returns the path to the cloud opt-out marker file.

@@ -59,6 +59,7 @@ No other endpoints are contacted. No telemetry, no analytics, no tracking.
 - `harbor cloud enable`: provisions free account (50 memories) for cross-device sync
 - `harbor cloud disable`: opts out permanently, deletes cloud config
 - **Plugin behavior**: creates a cloud account on first load (for credential setup page to work), but **no data is synced until you actively call `harbor remember`**. The account alone does not transmit any user data.
+- **Zero-knowledge credentials**: credentials are encrypted client-side (AES-256-GCM) before upload. Harbor Cloud stores only ciphertext — the server cannot decrypt or read your API keys, even if compromised.
 
 ### Revoking access
 ```bash

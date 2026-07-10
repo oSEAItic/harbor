@@ -74,6 +74,30 @@ harbor remember <connector> "Your analysis summary here"
 harbor remember <connector> "summary" --refs mem_abc123,mem_def456
 ```
 
+### Feature delivery worklog
+
+Track feature cycle time, agent sessions, blocking, verification, and scope changes
+in a local SQLite database. Worklog data stays local and is not part of Harbor
+Cloud memory sync.
+
+```bash
+harbor feature start "Shopee reconciliation" --project oseaitic-erp --type integration --size M --budget 2d
+harbor feature bind feat_abc123 --session "$HARBOR_SESSION" --source codex --external-session <conversation-id>
+harbor feature block feat_abc123 --note "waiting for staging"
+harbor feature resume feat_abc123
+harbor feature verify feat_abc123 --note "acceptance tests pass"
+harbor feature ship feat_abc123
+
+# Make scope changes explicit instead of silently expanding the feature.
+harbor feature scope feat_abc123 "support automatic refunds" --decision defer
+
+harbor worklog report --since 7d
+harbor worklog estimate --project oseaitic-erp --type integration --size M
+```
+
+Only mark a feature `verify` after checking its acceptance criteria. A feature
+must be verified before Harbor allows it to be shipped.
+
 ### Connector management
 
 ```bash

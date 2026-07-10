@@ -64,6 +64,7 @@ Workflow:
 		newSyncCmd(),
 		newImportCmd(),
 		newCloudCmd(),
+		newFeatureCmd(&outputFormat),
 	)
 
 	// ── Develop ──────────────────────────────────────────────────
@@ -86,6 +87,7 @@ Workflow:
 		newDoctorCmd(),
 		newUpdateCmd(version, srcDir),
 		newShareCmd(),
+		newWorklogCmd(&outputFormat),
 	)
 
 	// ── Help ─────────────────────────────────────────────────────

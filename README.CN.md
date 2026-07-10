@@ -216,6 +216,36 @@ harbor forget --topic ws-reconnect             # 按主题删除
 harbor forget --connector kuse-hive --confirm  # 批量删除
 ```
 
+### 本地 Feature Worklog
+
+AI 可以快速生成代码，但交付周期仍包含上下文恢复、阻塞、验证、返工和范围变化。
+Harbor 可以把 Agent session 绑定到 feature，统计完整的交付周期：
+
+```bash
+harbor feature start "Shopee reconciliation" \
+  --project oseaitic-erp --type integration --size M --budget 2d
+
+harbor feature bind feat_abc123 \
+  --session "$HARBOR_SESSION" --source codex --external-session <conversation-id>
+
+harbor feature block feat_abc123 --note "waiting for staging"
+harbor feature resume feat_abc123
+harbor feature verify feat_abc123 --note "acceptance tests pass"
+harbor feature ship feat_abc123
+
+harbor worklog report --since 7d
+harbor worklog estimate --project oseaitic-erp --type integration --size M
+```
+
+新增范围必须明确记录为 `include`、`swap`、`defer` 或 `reject`：
+
+```bash
+harbor feature scope feat_abc123 "automatic refunds" --decision defer
+```
+
+Worklog 数据保存在 `~/.harbor/worklog.db`（或 `$HARBOR_HOME/worklog.db`），
+只保存在本地，不会进入 Harbor Cloud 的 memory 同步。
+
 ### 凭证管理
 
 API Key 存储在 Harbor 加密钥匙串中 —— Tool 永远不接触原始密钥：

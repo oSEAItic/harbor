@@ -228,6 +228,38 @@ harbor forget --topic ws-reconnect             # Delete by topic
 harbor forget --connector kuse-hive --confirm  # Bulk delete
 ```
 
+### Local feature worklog
+
+AI makes code generation fast, but delivery time still includes context recovery,
+blocking, verification, rework, and scope changes. Harbor can connect agent
+sessions to features and measure that full cycle:
+
+```bash
+harbor feature start "Shopee reconciliation" \
+  --project oseaitic-erp --type integration --size M --budget 2d
+
+harbor feature bind feat_abc123 \
+  --session "$HARBOR_SESSION" --source codex --external-session <conversation-id>
+
+harbor feature block feat_abc123 --note "waiting for staging"
+harbor feature resume feat_abc123
+harbor feature verify feat_abc123 --note "acceptance tests pass"
+harbor feature ship feat_abc123
+
+harbor worklog report --since 7d
+harbor worklog estimate --project oseaitic-erp --type integration --size M
+```
+
+Scope additions are recorded explicitly as `include`, `swap`, `defer`, or
+`reject` decisions:
+
+```bash
+harbor feature scope feat_abc123 "automatic refunds" --decision defer
+```
+
+Worklog data is stored in `~/.harbor/worklog.db` (or `$HARBOR_HOME/worklog.db`).
+It is local-only and is never included in Harbor Cloud memory sync.
+
 ### Credential management
 
 Store API keys in Harbor's encrypted keychain — tools never see raw secrets:

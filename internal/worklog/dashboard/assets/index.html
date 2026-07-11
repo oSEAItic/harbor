@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Harbor Feature Calendar</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#calendar">Skip to calendar</a>
+  <header class="masthead">
+    <div>
+      <p class="brand">HARBOR / WORKLOG</p>
+      <h1>Feature Calendar</h1>
+    </div>
+    <div class="masthead-actions">
+      <span class="live-indicator"><i></i>LOCAL DATA</span>
+      <button class="icon-button" id="refresh" type="button" aria-label="Refresh worklog" title="Refresh worklog">&#8635;</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary-strip" aria-label="Worklog summary">
+      <div><span>IN FLIGHT</span><strong id="activeCount">--</strong></div>
+      <div><span>SHIPPED</span><strong id="shippedCount">--</strong></div>
+      <div><span>SESSIONS</span><strong id="sessionCount">--</strong></div>
+      <div><span>SCOPE ADDED</span><strong id="scopeCount">--</strong></div>
+      <p id="updatedAt">Reading local ledger...</p>
+    </section>
+
+    <section class="toolbar" aria-label="Calendar controls">
+      <div class="month-controls">
+        <button class="icon-button" id="prevMonth" type="button" aria-label="Previous month" title="Previous month">&#8592;</button>
+        <h2 id="monthLabel">Month</h2>
+        <button class="icon-button" id="nextMonth" type="button" aria-label="Next month" title="Next month">&#8594;</button>
+        <button class="text-button" id="today" type="button">Today</button>
+      </div>
+      <div class="filters">
+        <label for="projectFilter">Project</label>
+        <select id="projectFilter"><option value="">All projects</option></select>
+        <label for="statusFilter">Status</label>
+        <select id="statusFilter">
+          <option value="">All states</option>
+          <option value="active">Active</option>
+          <option value="blocked">Blocked</option>
+          <option value="verified">Verified</option>
+          <option value="shipped">Shipped</option>
+        </select>
+      </div>
+    </section>
+
+    <section id="calendar" class="calendar-shell" aria-label="Feature activity calendar">
+      <div class="weekday-row" aria-hidden="true">
+        <span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+      <div id="agenda" class="agenda"></div>
+      <div id="emptyState" class="empty-state" hidden>
+        <strong>No feature activity</strong>
+        <span>Change the month or filters to inspect another slice.</span>
+      </div>
+    </section>
+  </main>
+
+  <div id="scrim" class="scrim" hidden></div>
+  <aside id="receipt" class="receipt" role="dialog" aria-modal="true" aria-labelledby="receiptTitle" aria-hidden="true" inert>
+    <button class="icon-button receipt-close" id="closeReceipt" type="button" aria-label="Close feature receipt" title="Close">&#215;</button>
+    <div class="receipt-paper">
+      <p class="receipt-kicker">HARBOR FEATURE RECEIPT</p>
+      <p class="receipt-id" id="receiptId"></p>
+      <h2 id="receiptTitle"></h2>
+      <div class="receipt-rule"></div>
+      <dl id="receiptMetrics"></dl>
+      <div class="receipt-rule"></div>
+      <section>
+        <h3>EVENT TAPE</h3>
+        <ol id="receiptEvents" class="event-tape"></ol>
+      </section>
+      <section>
+        <h3>SCOPE LEDGER</h3>
+        <ul id="receiptScope" class="scope-ledger"></ul>
+      </section>
+      <p class="receipt-footer">LOCAL ONLY / NO CLOUD SYNC</p>
+    </div>
+  </aside>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

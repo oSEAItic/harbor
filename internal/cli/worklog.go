@@ -6,12 +6,36 @@ import (
 	"time"
 
 	"github.com/oseaitic/harbor/internal/worklog"
+	"github.com/oseaitic/harbor/internal/worklog/dashboard"
 	"github.com/spf13/cobra"
 )
 
 func newWorklogCmd(outputFormat *string) *cobra.Command {
 	cmd := &cobra.Command{Use: "worklog", Short: "Report feature cycle and scope metrics"}
-	cmd.AddCommand(newWorklogReportCmd(outputFormat), newWorklogEstimateCmd(outputFormat))
+	cmd.AddCommand(newWorklogReportCmd(outputFormat), newWorklogEstimateCmd(outputFormat), newWorklogServeCmd())
+	return cmd
+}
+
+func newWorklogServeCmd() *cobra.Command {
+	var address string
+	cmd := &cobra.Command{
+		Use:   "serve",
+		Short: "Serve the local feature calendar",
+		Long: `Serve a read-only feature calendar from the local worklog database.
+
+The server binds to localhost by default and does not sync or upload worklog data.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			store, err := worklog.NewStore()
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			return dashboard.Serve(cmd.Context(), store, address, func(url string) {
+				fmt.Fprintf(cmd.OutOrStdout(), "Feature calendar: %s\nPress Ctrl-C to stop.\n", url)
+			})
+		},
+	}
+	cmd.Flags().StringVar(&address, "addr", "127.0.0.1:4737", "Listen address")
 	return cmd
 }
 

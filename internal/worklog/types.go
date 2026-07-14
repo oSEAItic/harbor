@@ -45,6 +45,7 @@ type SessionBinding struct {
 	FeatureID         string    `json:"feature_id"`
 	HarborSessionID   string    `json:"harbor_session_id"`
 	Source            string    `json:"source,omitempty"`
+	ModelName         string    `json:"model_name,omitempty"`
 	ExternalSessionID string    `json:"external_session_id,omitempty"`
 	RepoPath          string    `json:"repo_path,omitempty"`
 	Branch            string    `json:"branch,omitempty"`

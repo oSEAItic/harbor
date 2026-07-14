@@ -23,7 +23,7 @@ func TestDashboardHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.BindSession(context.Background(), worklog.SessionBinding{FeatureID: feature.ID, HarborSessionID: "ses_1", Source: "codex"}); err != nil {
+	if err := store.BindSession(context.Background(), worklog.SessionBinding{FeatureID: feature.ID, HarborSessionID: "ses_1", Source: "codex", ModelName: "gpt-5"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -51,6 +51,9 @@ func TestDashboardHandler(t *testing.T) {
 	}
 	if len(data.Features) != 1 || data.Features[0].Feature.ID != feature.ID || data.Features[0].SessionCount != 1 {
 		t.Fatalf("unexpected dashboard data: %+v", data)
+	}
+	if data.Features[0].Sessions[0].ModelName != "gpt-5" {
+		t.Fatalf("model = %q, want gpt-5", data.Features[0].Sessions[0].ModelName)
 	}
 
 	indexResponse, err := http.Get(server.URL + "/")

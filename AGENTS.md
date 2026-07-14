@@ -82,7 +82,7 @@ Cloud memory sync.
 
 ```bash
 harbor feature start "Shopee reconciliation" --project oseaitic-erp --type integration --size M --budget 2d
-harbor feature bind feat_abc123 --session "$HARBOR_SESSION" --source codex --external-session <conversation-id>
+harbor feature bind feat_abc123 --session "$HARBOR_SESSION" --source codex --model gpt-5 --external-session <conversation-id>
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
 harbor feature verify feat_abc123 --note "acceptance tests pass"
@@ -95,6 +95,9 @@ harbor worklog report --since 7d
 harbor worklog estimate --project oseaitic-erp --type integration --size M
 harbor worklog serve                    # http://127.0.0.1:4737
 ```
+
+Set `HARBOR_MODEL` to record the active model automatically when binding a
+session, or pass `--model` explicitly when multiple models share one client.
 
 Only mark a feature `verify` after checking its acceptance criteria. A feature
 must be verified before Harbor allows it to be shipped.

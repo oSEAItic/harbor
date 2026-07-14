@@ -165,6 +165,11 @@ function metricRow(label, value) {
   return [dt, dd];
 }
 
+function sessionModels(sessions) {
+  const names = [...new Set(sessions.map((session) => session.model_name).filter(Boolean))];
+  return names.length ? names.join(", ") : "-";
+}
+
 function openReceipt(item) {
   receiptTrigger = document.activeElement;
   el("receiptId").textContent = `${item.feature.id} / ${item.feature.project}`;
@@ -176,6 +181,7 @@ function openReceipt(item) {
     ...metricRow("BLOCKED", duration(item.blocked_seconds)),
     ...metricRow("VERIFY LAG", duration(item.verification_lag_seconds)),
     ...metricRow("SESSIONS", String(item.session_count)),
+    ...metricRow("MODELS", sessionModels(item.sessions)),
     ...metricRow("SIZE / TYPE", `${item.feature.size || "-"} / ${item.feature.type || "-"}`),
     ...metricRow("BUDGET", duration(item.feature.budget_seconds)),
     ...metricRow("SCOPE + / LATER", `${item.scope_added} / ${item.scope_deferred}`),

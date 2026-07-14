@@ -93,6 +93,7 @@ harbor feature scope feat_abc123 "support automatic refunds" --decision defer
 
 harbor worklog report --since 7d
 harbor worklog estimate --project oseaitic-erp --type integration --size M
+harbor worklog serve                    # http://127.0.0.1:4737
 ```
 
 Only mark a feature `verify` after checking its acceptance criteria. A feature

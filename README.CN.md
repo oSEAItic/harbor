@@ -235,6 +235,7 @@ harbor feature ship feat_abc123
 
 harbor worklog report --since 7d
 harbor worklog estimate --project oseaitic-erp --type integration --size M
+harbor worklog serve                    # http://127.0.0.1:4737
 ```
 
 新增范围必须明确记录为 `include`、`swap`、`defer` 或 `reject`：
@@ -245,6 +246,10 @@ harbor feature scope feat_abc123 "automatic refunds" --decision defer
 
 Worklog 数据保存在 `~/.harbor/worklog.db`（或 `$HARBOR_HOME/worklog.db`），
 只保存在本地，不会进入 Harbor Cloud 的 memory 同步。
+
+`harbor worklog serve` 会启动一个只读、响应式的 feature 日历。Feature 会覆盖其
+活跃日期，点击后以小票展示 cycle、blocked、verification、session、event 和 scope
+明细。可以用 `--addr` 指定其他本地监听地址。
 
 ### 凭证管理
 

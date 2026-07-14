@@ -248,6 +248,7 @@ harbor feature ship feat_abc123
 
 harbor worklog report --since 7d
 harbor worklog estimate --project oseaitic-erp --type integration --size M
+harbor worklog serve                    # http://127.0.0.1:4737
 ```
 
 Scope additions are recorded explicitly as `include`, `swap`, `defer`, or
@@ -259,6 +260,11 @@ harbor feature scope feat_abc123 "automatic refunds" --decision defer
 
 Worklog data is stored in `~/.harbor/worklog.db` (or `$HARBOR_HOME/worklog.db`).
 It is local-only and is never included in Harbor Cloud memory sync.
+
+`harbor worklog serve` opens a read-only, responsive feature calendar. Feature
+activity spans its active dates; selecting an entry opens a receipt with cycle,
+blocked, verification, session, event, and scope details. Use `--addr` to choose
+a different local address.
 
 ### Credential management
 

@@ -226,7 +226,7 @@ harbor feature start "Shopee reconciliation" \
   --project oseaitic-erp --type integration --size M --budget 2d
 
 harbor feature bind feat_abc123 \
-  --session "$HARBOR_SESSION" --source codex --external-session <conversation-id>
+  --session "$HARBOR_SESSION" --source codex --model <model-name> --external-session <conversation-id>
 
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
@@ -237,6 +237,9 @@ harbor worklog report --since 7d
 harbor worklog estimate --project oseaitic-erp --type integration --size M
 harbor worklog serve                    # http://127.0.0.1:4737
 ```
+
+可以设置 `HARBOR_MODEL` 自动记录当前模型，也可以显式传入 `--model`。模型信息按
+session 保存，因为同一个 feature 可能跨多个 conversation 和模型完成。
 
 新增范围必须明确记录为 `include`、`swap`、`defer` 或 `reject`：
 

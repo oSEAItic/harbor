@@ -2,6 +2,7 @@ package worklog
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -135,6 +136,7 @@ func TestScopeValidationAndSessionDeduplication(t *testing.T) {
 	if err := store.BindSession(ctx, binding); err != nil {
 		t.Fatal(err)
 	}
+	binding.ModelName = "gpt-5"
 	if err := store.BindSession(ctx, binding); err != nil {
 		t.Fatal(err)
 	}
@@ -144,6 +146,9 @@ func TestScopeValidationAndSessionDeduplication(t *testing.T) {
 	}
 	if len(detail.Sessions) != 1 {
 		t.Fatalf("sessions = %d, want 1", len(detail.Sessions))
+	}
+	if detail.Sessions[0].ModelName != "gpt-5" {
+		t.Fatalf("model = %q, want gpt-5", detail.Sessions[0].ModelName)
 	}
 }
 
@@ -184,5 +189,53 @@ func TestReopenedFeatureContinuesCycle(t *testing.T) {
 	}
 	if stats.VerificationLagSeconds != 0 {
 		t.Fatalf("verification lag seconds = %d, want 0 after reopen", stats.VerificationLagSeconds)
+	}
+}
+
+func TestMigratesV1SessionTable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worklog.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statements := []string{
+		`CREATE TABLE schema_version (version INTEGER NOT NULL)`,
+		`INSERT INTO schema_version(version) VALUES (1)`,
+		`CREATE TABLE features (id TEXT PRIMARY KEY, project TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT '', size TEXT NOT NULL DEFAULT '', budget_seconds INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+		`CREATE TABLE feature_sessions (feature_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE, harbor_session_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', external_session_id TEXT NOT NULL DEFAULT '', repo_path TEXT NOT NULL DEFAULT '', branch TEXT NOT NULL DEFAULT '', bound_at TEXT NOT NULL, UNIQUE(feature_id, harbor_session_id, source, external_session_id))`,
+		`INSERT INTO features VALUES ('feat_old', 'harbor', 'Old feature', '', '', 0, 'active', '2026-07-01T00:00:00Z', '2026-07-01T00:00:00Z')`,
+		`INSERT INTO feature_sessions VALUES ('feat_old', 'ses_old', 'codex', 'conv_old', '', '', '2026-07-01T00:00:00Z')`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := NewStoreAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	detail, err := store.Detail(context.Background(), "feat_old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Sessions) != 1 || detail.Sessions[0].ModelName != "" {
+		t.Fatalf("unexpected migrated session: %+v", detail.Sessions)
+	}
+	if err := store.BindSession(context.Background(), SessionBinding{FeatureID: "feat_old", HarborSessionID: "ses_old", Source: "codex", ExternalSessionID: "conv_old", ModelName: "gpt-5"}); err != nil {
+		t.Fatal(err)
+	}
+	detail, err = store.Detail(context.Background(), "feat_old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Sessions[0].ModelName != "gpt-5" {
+		t.Fatalf("model = %q, want gpt-5", detail.Sessions[0].ModelName)
 	}
 }

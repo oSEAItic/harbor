@@ -239,7 +239,7 @@ harbor feature start "Shopee reconciliation" \
   --project oseaitic-erp --type integration --size M --budget 2d
 
 harbor feature bind feat_abc123 \
-  --session "$HARBOR_SESSION" --source codex --external-session <conversation-id>
+  --session "$HARBOR_SESSION" --source codex --model <model-name> --external-session <conversation-id>
 
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
@@ -250,6 +250,10 @@ harbor worklog report --since 7d
 harbor worklog estimate --project oseaitic-erp --type integration --size M
 harbor worklog serve                    # http://127.0.0.1:4737
 ```
+
+Set `HARBOR_MODEL` to attach the active model automatically, or pass `--model`
+explicitly. Model identity is stored per session because one feature can span
+multiple conversations and models.
 
 Scope additions are recorded explicitly as `include`, `swap`, `defer`, or
 `reject` decisions:

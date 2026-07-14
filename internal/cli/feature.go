@@ -134,14 +134,14 @@ func newFeatureShowCmd(outputFormat *string) *cobra.Command {
 			for _, event := range detail.Events {
 				fmt.Fprintf(cmd.OutOrStdout(), "  %s  %-10s %s\n", event.CreatedAt.Local().Format("2006-01-02 15:04"), event.Kind, event.Note)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "\nSessions: %d  Scope changes: %d\n", len(detail.Sessions), len(detail.Scope))
+			fmt.Fprintf(cmd.OutOrStdout(), "\nSessions: %d  Models: %s  Scope changes: %d\n", len(detail.Sessions), formatSessionModels(detail.Sessions), len(detail.Scope))
 			return nil
 		},
 	}
 }
 
 func newFeatureBindCmd() *cobra.Command {
-	var session, source, external, repo, branch string
+	var session, source, model, external, repo, branch string
 	cmd := &cobra.Command{
 		Use: "bind <feature-id>", Short: "Bind an agent session to a feature", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -151,6 +151,9 @@ func newFeatureBindCmd() *cobra.Command {
 			if session == "" {
 				session = strings.TrimSpace(external)
 			}
+			if model == "" {
+				model = strings.TrimSpace(os.Getenv("HARBOR_MODEL"))
+			}
 			if session == "" {
 				return fmt.Errorf("provide --session, --external-session, or set HARBOR_SESSION")
 			}
@@ -159,7 +162,7 @@ func newFeatureBindCmd() *cobra.Command {
 				return err
 			}
 			defer store.Close()
-			err = store.BindSession(cmd.Context(), worklog.SessionBinding{FeatureID: args[0], HarborSessionID: session, Source: source, ExternalSessionID: external, RepoPath: repo, Branch: branch})
+			err = store.BindSession(cmd.Context(), worklog.SessionBinding{FeatureID: args[0], HarborSessionID: session, Source: source, ModelName: model, ExternalSessionID: external, RepoPath: repo, Branch: branch})
 			if err != nil {
 				return err
 			}
@@ -169,6 +172,7 @@ func newFeatureBindCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&session, "session", "", "Harbor session ID (defaults to HARBOR_SESSION)")
 	cmd.Flags().StringVar(&source, "source", "", "Agent source, such as codex or claude-code")
+	cmd.Flags().StringVar(&model, "model", "", "Model name (defaults to HARBOR_MODEL)")
 	cmd.Flags().StringVar(&external, "external-session", "", "Agent client's conversation or session ID")
 	cmd.Flags().StringVar(&repo, "repo", "", "Repository path")
 	cmd.Flags().StringVar(&branch, "branch", "", "Git branch")
@@ -234,6 +238,22 @@ func parseWorklogDuration(value string) (time.Duration, error) {
 		return parsed * 24, nil
 	}
 	return time.ParseDuration(value)
+}
+
+func formatSessionModels(sessions []worklog.SessionBinding) string {
+	seen := make(map[string]bool)
+	var models []string
+	for _, session := range sessions {
+		model := strings.TrimSpace(session.ModelName)
+		if model != "" && !seen[model] {
+			seen[model] = true
+			models = append(models, model)
+		}
+	}
+	if len(models) == 0 {
+		return "-"
+	}
+	return strings.Join(models, ", ")
 }
 
 func printJSON(cmd *cobra.Command, value any) error {

@@ -226,7 +226,7 @@ harbor feature start "Shopee reconciliation" \
   --project oseaitic-erp --type integration --size M --budget 2d
 
 harbor feature bind feat_abc123 \
-  --session "$HARBOR_SESSION" --source codex --model gpt-5 --external-session <conversation-id>
+  --session "$HARBOR_SESSION" --source codex --model <model-name> --external-session <conversation-id>
 
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123

@@ -393,7 +393,12 @@ func (s *Store) Detail(ctx context.Context, id string) (Detail, error) {
 	if err != nil {
 		return Detail{}, err
 	}
-	d := Detail{Feature: f}
+	d := Detail{
+		Feature:  f,
+		Events:   make([]Event, 0),
+		Sessions: make([]SessionBinding, 0),
+		Scope:    make([]ScopeItem, 0),
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id, feature_id, kind, note, session_id, created_at FROM feature_events WHERE feature_id = ? ORDER BY created_at, id`, id)
 	if err != nil {
 		return Detail{}, err

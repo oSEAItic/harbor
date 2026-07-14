@@ -55,6 +55,9 @@ func TestDashboardHandler(t *testing.T) {
 	if data.Features[0].Sessions[0].ModelName != "gpt-5" {
 		t.Fatalf("model = %q, want gpt-5", data.Features[0].Sessions[0].ModelName)
 	}
+	if data.Features[0].Scope == nil {
+		t.Fatal("empty scope must be encoded as [] instead of null")
+	}
 
 	indexResponse, err := http.Get(server.URL + "/")
 	if err != nil {

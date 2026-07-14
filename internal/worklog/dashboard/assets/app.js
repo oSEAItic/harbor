@@ -202,13 +202,14 @@ function openReceipt(item) {
   }
 
   const scope = el("receiptScope");
+  const scopeItems = item.scope || [];
   scope.replaceChildren();
-  if (!item.scope.length) {
+  if (!scopeItems.length) {
     const li = document.createElement("li");
     li.textContent = "No scope changes recorded.";
     scope.append(li);
   } else {
-    for (const entry of item.scope) {
+    for (const entry of scopeItems) {
       const li = document.createElement("li");
       const decision = document.createElement("b");
       const text = document.createElement("span");

@@ -270,6 +270,27 @@ activity spans its active dates; selecting an entry opens a receipt with cycle,
 blocked, verification, session, event, and scope details. Use `--addr` to choose
 a different local address.
 
+### Harbor Farm
+
+Use the same Harbor Cloud identity across the CLI, supported agent surfaces,
+and presentation clients such as Harbor Studio:
+
+```bash
+harbor farm status
+harbor farm plant 0 wheat
+harbor farm harvest 0
+harbor farm telemetry serve           # private OTLP JSON receiver on 127.0.0.1
+```
+
+`harbor mcp` also exposes `harbor_farm_status`, `harbor_farm_plant`, and
+`harbor_farm_harvest`, so Claude Code and Codex CLI/IDE/App use the exact same
+account-owned ledger as the terminal and Harbor Studio.
+
+Agent events are queued under `$HARBOR_HOME/farm-queue` before upload. The event
+contract accepts agent/model/status/tool-name/token metadata only; prompts,
+outputs, tool arguments, and file content are discarded. Waiting earns no Farm
+coins, and the Farm ledger is separate from paid oSEAItic credits.
+
 ### Credential management
 
 Store API keys in Harbor's encrypted keychain — tools never see raw secrets:

@@ -64,6 +64,7 @@ Workflow:
 		newSyncCmd(),
 		newImportCmd(),
 		newCloudCmd(),
+		newFarmCmd(&outputFormat, version),
 		newFeatureCmd(&outputFormat),
 	)
 

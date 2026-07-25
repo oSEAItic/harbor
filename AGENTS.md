@@ -102,6 +102,19 @@ session, or pass `--model` explicitly when multiple models share one client.
 Only mark a feature `verify` after checking its acceptance criteria. A feature
 must be verified before Harbor allows it to be shipped.
 
+### Harbor Farm
+
+```bash
+harbor farm status
+harbor farm plant 0 wheat
+harbor farm harvest 0
+harbor farm telemetry serve
+```
+
+Farm uses the existing Harbor Cloud account. Agent telemetry is opt-in and
+metadata-only; never add prompts, responses, tool arguments, or file content to
+Farm events. Waiting states do not earn Farm coins.
+
 ### Connector management
 
 ```bash
@@ -254,6 +267,19 @@ Your note appears as `meta.context` on every future call to this connector — f
 2. Patterns or anomalies found
 3. Conclusions reached
 4. Recommendations made
+
+### Harbor Farm tools
+
+The Harbor MCP server exposes the same account-owned Farm ledger as the CLI and
+Harbor Studio:
+
+- `harbor_farm_status` — read Farm profile, plots, usage, and active sessions
+- `harbor_farm_plant` — plant `wheat`, `carrot`, or `tomato` in plot `0`-`5`
+- `harbor_farm_harvest` — harvest a ready plot
+
+Use `harbor mcp` from Claude Code, Codex CLI, the Codex IDE extension, or the
+Codex app. Farm telemetry remains opt-in and metadata-only; MCP tools do not
+grant access to prompts, outputs, tool arguments, file content, or provider keys.
 
 ---
 

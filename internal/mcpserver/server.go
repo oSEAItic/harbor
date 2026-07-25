@@ -8,9 +8,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/connector"
+	harborctx "github.com/oseaitic/harbor/internal/context"
 	"github.com/oseaitic/harbor/internal/executor"
+	"github.com/oseaitic/harbor/internal/farm"
 	"github.com/oseaitic/harbor/internal/httpfetch"
 	"github.com/oseaitic/harbor/internal/memory"
 	"github.com/oseaitic/harbor/internal/pipeline"
@@ -50,6 +51,12 @@ func Serve(version string) error {
 
 	// Register harbor_http tool for auth-proxy HTTP fetching
 	s.AddTool(httpfetch.ToolDefinition(), httpfetch.MakeHandler())
+
+	// Farm is a Harbor capability, so every MCP client sees the same ledger as
+	// the CLI and Studio instead of maintaining surface-specific state.
+	for _, farmTool := range farm.MCPTools(version) {
+		s.AddTool(farmTool.Tool, farmTool.Handler)
+	}
 
 	return server.ServeStdio(s)
 }

@@ -278,7 +278,12 @@ func defaultCommandTemplates() []commandTemplate {
 		{
 			Name:        "mcp_server",
 			Template:    "harbor mcp",
-			Description: "Run Harbor as an MCP server (recommended)",
+			Description: "Run Harbor as an MCP server, including shared Farm tools (recommended)",
+		},
+		{
+			Name:        "farm_status",
+			Template:    "harbor farm status",
+			Description: "Read the shared Farm ledger used by Studio, terminal, Claude Code, and Codex",
 		},
 		{
 			Name:        "mcp_proxy",

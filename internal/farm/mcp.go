@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -39,7 +40,40 @@ func mcpTools(factory mcpClientFactory) []struct {
 		{Tool: farmStatusTool(), Handler: makeFarmStatusHandler(factory)},
 		{Tool: farmPlantTool(), Handler: makeFarmPlantHandler(factory)},
 		{Tool: farmHarvestTool(), Handler: makeFarmHarvestHandler(factory)},
+		{Tool: farmConnectTool(), Handler: makeFarmConnectHandler(factory)},
+		{Tool: farmVisitTool(), Handler: makeFarmVisitHandler(factory)},
+		{Tool: farmForageTool(), Handler: makeFarmForageHandler(factory)},
 	}
+}
+
+func farmConnectTool() mcp.Tool {
+	tool := mcp.NewToolWithRawSchema(
+		"harbor_farm_connect",
+		"Connect another Harbor account as a Farm neighbor using their eight-character Farm code.",
+		json.RawMessage(`{"type":"object","properties":{"farm_code":{"type":"string","minLength":8,"maxLength":8}},"required":["farm_code"],"additionalProperties":false}`),
+	)
+	tool.Annotations = mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(false), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(true)}
+	return tool
+}
+
+func farmVisitTool() mcp.Tool {
+	tool := mcp.NewToolWithRawSchema(
+		"harbor_farm_visit",
+		"Visit a connected neighbor's Farm, including ready plots and their public revealed session crops.",
+		json.RawMessage(`{"type":"object","properties":{"farm_code":{"type":"string","minLength":8,"maxLength":8}},"required":["farm_code"],"additionalProperties":false}`),
+	)
+	tool.Annotations = mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(true)}
+	return tool
+}
+
+func farmForageTool() mcp.Tool {
+	tool := mcp.NewToolWithRawSchema(
+		"harbor_farm_forage",
+		"Gather one limited clipping from a connected neighbor's ready crop. Each visitor can gather once and the owner retains at least 80 percent of the harvest.",
+		json.RawMessage(`{"type":"object","properties":{"farm_code":{"type":"string","minLength":8,"maxLength":8},"plot_index":{"type":"integer","minimum":0,"maximum":5}},"required":["farm_code","plot_index"],"additionalProperties":false}`),
+	)
+	tool.Annotations = mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(false), DestructiveHint: mcp.ToBoolPtr(true), IdempotentHint: mcp.ToBoolPtr(false), OpenWorldHint: mcp.ToBoolPtr(true)}
+	return tool
 }
 
 func farmStatusTool() mcp.Tool {
@@ -153,5 +187,64 @@ func makeFarmHarvestHandler(factory mcpClientFactory) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return mcp.NewToolResultText(fmt.Sprintf("Harvested plot %d.", plot)), nil
+	}
+}
+
+func makeFarmConnectHandler(factory mcpClientFactory) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		farmCode := strings.ToUpper(strings.TrimSpace(req.GetString("farm_code", "")))
+		if len(farmCode) != 8 {
+			return mcp.NewToolResultError("farm_code must be 8 characters"), nil
+		}
+		client, err := factory()
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		if err := client.ConnectNeighbor(ctx, farmCode); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText("Connected to Farm " + farmCode + "."), nil
+	}
+}
+
+func makeFarmVisitHandler(factory mcpClientFactory) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		farmCode := strings.ToUpper(strings.TrimSpace(req.GetString("farm_code", "")))
+		client, err := factory()
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		neighbor, err := client.VisitNeighbor(ctx, farmCode)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		data, err := json.Marshal(neighbor)
+		if err != nil {
+			return mcp.NewToolResultError("encoding neighbor Farm: " + err.Error()), nil
+		}
+		return mcp.NewToolResultText(string(data)), nil
+	}
+}
+
+func makeFarmForageHandler(factory mcpClientFactory) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		farmCode := strings.ToUpper(strings.TrimSpace(req.GetString("farm_code", "")))
+		plot := req.GetInt("plot_index", -1)
+		if plot < 0 || plot >= 6 {
+			return mcp.NewToolResultError("plot_index must be 0-5"), nil
+		}
+		client, err := factory()
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		result, err := client.ForageNeighbor(ctx, farmCode, plot)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		data, err := json.Marshal(result)
+		if err != nil {
+			return mcp.NewToolResultError("encoding forage result: " + err.Error()), nil
+		}
+		return mcp.NewToolResultText(string(data)), nil
 	}
 }

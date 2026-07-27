@@ -277,19 +277,35 @@ and presentation clients such as Harbor Studio:
 
 ```bash
 harbor farm status
+harbor farm watch                      # compact view for a second terminal pane
 harbor farm plant 0 wheat
 harbor farm harvest 0
+harbor farm connect A1B2C3D4           # exchange Farm codes with a friend
+harbor farm visit A1B2C3D4
+harbor farm forage A1B2C3D4 2          # one clipping per visitor and crop
 harbor farm telemetry serve           # private OTLP JSON receiver on 127.0.0.1
 ```
 
-`harbor mcp` also exposes `harbor_farm_status`, `harbor_farm_plant`, and
-`harbor_farm_harvest`, so Claude Code and Codex CLI/IDE/App use the exact same
-account-owned ledger as the terminal and Harbor Studio.
+`harbor mcp` exposes the same status, planting, harvesting, neighbor connection,
+visiting, and foraging actions, so Claude Code and Codex CLI/IDE/App use the
+exact same account-owned ledger as the terminal and Harbor Studio.
+
+Each connected agent session also grows one session crop. It begins as a
+mystery seed, advances from metadata-only lifecycle events, and reveals a
+deterministic species and genome when the agent yields or finishes. Farm
+receipts contain bucketed usage and generic event counts, never task content.
+Friends connect with eight-character Farm codes. A visitor can gather once from
+each ready crop, at most three visitors can gather from a crop, and the owner
+retains at least 80 percent of the normal harvest.
 
 Agent events are queued under `$HARBOR_HOME/farm-queue` before upload. The event
 contract accepts agent/model/status/tool-name/token metadata only; prompts,
 outputs, tool arguments, and file content are discarded. Waiting earns no Farm
 coins, and the Farm ledger is separate from paid oSEAItic credits.
+
+The repository also includes the cross-client `plugins/harbor-farm` bundle and
+marketplace manifests for Codex and Claude Code. Both integrations launch the
+same `harbor mcp` process rather than creating a second Farm or credential store.
 
 ### Credential management
 

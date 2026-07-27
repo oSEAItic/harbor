@@ -10,21 +10,29 @@ import (
 
 func TestMCPToolsExposeSharedFarmWithMutationAnnotations(t *testing.T) {
 	tools := mcpTools(func() (*Client, error) { return nil, errors.New("not connected") })
-	if len(tools) != 3 {
-		t.Fatalf("got %d tools, want 3", len(tools))
+	if len(tools) != 6 {
+		t.Fatalf("got %d tools, want 6", len(tools))
 	}
-	if tools[0].Tool.Name != "harbor_farm_status" || tools[1].Tool.Name != "harbor_farm_plant" || tools[2].Tool.Name != "harbor_farm_harvest" {
-		t.Fatalf("unexpected Farm tools: %q, %q, %q", tools[0].Tool.Name, tools[1].Tool.Name, tools[2].Tool.Name)
+	want := []string{"harbor_farm_status", "harbor_farm_plant", "harbor_farm_harvest", "harbor_farm_connect", "harbor_farm_visit", "harbor_farm_forage"}
+	for i, name := range want {
+		if tools[i].Tool.Name != name {
+			t.Fatalf("tool %d = %q, want %q", i, tools[i].Tool.Name, name)
+		}
 	}
-	if tools[0].Tool.Annotations.ReadOnlyHint == nil || !*tools[0].Tool.Annotations.ReadOnlyHint {
-		t.Fatal("Farm status must be annotated read-only")
+	for _, index := range []int{0, 4} {
+		if tools[index].Tool.Annotations.ReadOnlyHint == nil || !*tools[index].Tool.Annotations.ReadOnlyHint {
+			t.Fatalf("%s must be annotated read-only", tools[index].Tool.Name)
+		}
 	}
-	for _, tool := range tools[1:] {
+	for _, index := range []int{1, 2, 3, 5} {
+		tool := tools[index]
 		if tool.Tool.Annotations.ReadOnlyHint == nil || *tool.Tool.Annotations.ReadOnlyHint {
 			t.Fatalf("%s must be annotated as mutating", tool.Tool.Name)
 		}
-		if tool.Tool.Annotations.DestructiveHint == nil || !*tool.Tool.Annotations.DestructiveHint {
-			t.Fatalf("%s must warn clients before changing the Farm", tool.Tool.Name)
+	}
+	for _, index := range []int{1, 2, 5} {
+		if tools[index].Tool.Annotations.DestructiveHint == nil || !*tools[index].Tool.Annotations.DestructiveHint {
+			t.Fatalf("%s must warn clients before changing the Farm", tools[index].Tool.Name)
 		}
 	}
 }

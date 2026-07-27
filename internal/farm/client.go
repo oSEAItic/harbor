@@ -38,6 +38,8 @@ type Plot struct {
 	ReadyAt          *time.Time `json:"ready_at"`
 	IsReady          bool       `json:"is_ready"`
 	RemainingSeconds int        `json:"remaining_seconds"`
+	ForageCount      int        `json:"forage_count,omitempty"`
+	CanForage        bool       `json:"can_forage,omitempty"`
 }
 
 type AgentSession struct {
@@ -46,6 +48,72 @@ type AgentSession struct {
 	Model             string `json:"model,omitempty"`
 	State             string `json:"state"`
 	UsageQuality      string `json:"usage_quality"`
+}
+
+type SessionReceipt struct {
+	Version      int    `json:"version"`
+	Source       string `json:"source"`
+	ModelFamily  string `json:"model_family,omitempty"`
+	Duration     string `json:"duration_bucket"`
+	InputTokens  string `json:"input_token_bucket"`
+	OutputTokens string `json:"output_token_bucket"`
+	ToolCount    int    `json:"tool_count"`
+	EventCount   int    `json:"event_count"`
+	Outcome      string `json:"outcome"`
+	Privacy      string `json:"privacy"`
+}
+
+type CropGenome struct {
+	Version     int    `json:"version"`
+	Fingerprint string `json:"fingerprint"`
+	Hue         int    `json:"hue"`
+	LeafShape   string `json:"leaf_shape"`
+	FruitShape  string `json:"fruit_shape"`
+	Marking     string `json:"marking"`
+	Trait       string `json:"trait"`
+}
+
+type SessionCrop struct {
+	ID          string         `json:"id"`
+	DisplayName string         `json:"display_name"`
+	Species     string         `json:"species"`
+	Rarity      string         `json:"rarity"`
+	Stage       string         `json:"stage"`
+	Progress    int            `json:"progress"`
+	Genome      CropGenome     `json:"genome"`
+	Receipt     SessionReceipt `json:"receipt"`
+	RevealedAt  *time.Time     `json:"revealed_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+type Neighbor struct {
+	FarmCode     string `json:"farm_code"`
+	DisplayName  string `json:"display_name"`
+	Level        int    `json:"level"`
+	ReadyPlots   int    `json:"ready_plots"`
+	SessionCrops int    `json:"session_crops"`
+}
+
+type FarmSocial struct {
+	FarmCode  string     `json:"farm_code"`
+	Neighbors []Neighbor `json:"neighbors"`
+}
+
+type NeighborFarm struct {
+	FarmCode     string        `json:"farm_code"`
+	DisplayName  string        `json:"display_name"`
+	Level        int           `json:"level"`
+	Plots        []Plot        `json:"plots"`
+	SessionCrops []SessionCrop `json:"session_crops"`
+	ServerTime   time.Time     `json:"server_time"`
+}
+
+type ForageResult struct {
+	FarmCode           string `json:"farm_code"`
+	PlotIndex          int    `json:"plot_index"`
+	CropType           string `json:"crop_type"`
+	Reward             int    `json:"reward"`
+	RemainingClippings int    `json:"remaining_clippings"`
 }
 
 type Bootstrap struct {
@@ -62,6 +130,8 @@ type Bootstrap struct {
 	Crops          map[string]Crop `json:"crops"`
 	TodayUsage     Usage           `json:"today_usage"`
 	ActiveSessions []AgentSession  `json:"active_sessions"`
+	SessionCrops   []SessionCrop   `json:"session_crops"`
+	Social         FarmSocial      `json:"social"`
 	ServerTime     time.Time       `json:"server_time"`
 }
 
@@ -157,6 +227,22 @@ func (c *Client) Plant(ctx context.Context, plotIndex int, cropType, idempotency
 
 func (c *Client) Harvest(ctx context.Context, plotIndex int) error {
 	return c.request(ctx, http.MethodPost, fmt.Sprintf("/api/farm/plots/%d/harvest", plotIndex), map[string]any{}, nil)
+}
+
+func (c *Client) ConnectNeighbor(ctx context.Context, farmCode string) error {
+	return c.request(ctx, http.MethodPost, "/api/farm/neighbors/connect", map[string]string{"farm_code": farmCode}, nil)
+}
+
+func (c *Client) VisitNeighbor(ctx context.Context, farmCode string) (*NeighborFarm, error) {
+	var neighbor NeighborFarm
+	err := c.request(ctx, http.MethodGet, "/api/farm/neighbors/"+farmCode, nil, &neighbor)
+	return &neighbor, err
+}
+
+func (c *Client) ForageNeighbor(ctx context.Context, farmCode string, plotIndex int) (*ForageResult, error) {
+	var result ForageResult
+	err := c.request(ctx, http.MethodPost, fmt.Sprintf("/api/farm/neighbors/%s/plots/%d/forage", farmCode, plotIndex), map[string]any{}, &result)
+	return &result, err
 }
 
 // Record queues before sending so a temporary network failure does not lose usage.

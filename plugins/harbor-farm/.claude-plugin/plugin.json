@@ -1,0 +1,13 @@
+{
+  "name": "harbor-farm",
+  "version": "0.1.0",
+  "description": "Grow session-native crops and visit friends while Claude Code runs.",
+  "author": {
+    "name": "oSEAItic",
+    "url": "https://github.com/oSEAItic"
+  },
+  "homepage": "https://github.com/oSEAItic/harbor",
+  "repository": "https://github.com/oSEAItic/harbor",
+  "license": "Apache-2.0",
+  "keywords": ["farm", "agents", "claude-code", "social", "waiting"]
+}

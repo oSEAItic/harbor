@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "harbor": {
+      "command": "harbor",
+      "args": ["mcp"]
+    }
+  }
+}

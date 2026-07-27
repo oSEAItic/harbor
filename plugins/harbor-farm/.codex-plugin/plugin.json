@@ -1,0 +1,30 @@
+{
+  "name": "harbor-farm",
+  "version": "0.1.0",
+  "description": "Grow session-native crops and visit friends while coding agents run.",
+  "author": {
+    "name": "oSEAItic",
+    "url": "https://github.com/oSEAItic"
+  },
+  "homepage": "https://github.com/oSEAItic/harbor",
+  "repository": "https://github.com/oSEAItic/harbor",
+  "license": "Apache-2.0",
+  "keywords": ["farm", "agents", "codex", "social", "waiting"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Harbor Farm",
+    "shortDescription": "Play a shared Farm while agents run.",
+    "longDescription": "Harbor Farm turns metadata-only Agent sessions into mystery crops, shared plots, neighbor visits, and limited crop foraging without sending prompts, outputs, tool arguments, or file contents.",
+    "developerName": "oSEAItic",
+    "category": "Lifestyle",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/oSEAItic/harbor",
+    "defaultPrompt": [
+      "Open my Harbor Farm and show what is growing.",
+      "Visit a Farm neighbor with me while this task runs.",
+      "Show the session crops my agents have discovered."
+    ],
+    "brandColor": "#8FA66A"
+  },
+  "mcpServers": "./.mcp.json"
+}

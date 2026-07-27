@@ -1,0 +1,20 @@
+{
+  "name": "harbor-marketplace",
+  "interface": {
+    "displayName": "Harbor"
+  },
+  "plugins": [
+    {
+      "name": "harbor-farm",
+      "source": {
+        "source": "local",
+        "path": "./plugins/harbor-farm"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

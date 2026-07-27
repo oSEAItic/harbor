@@ -106,8 +106,12 @@ must be verified before Harbor allows it to be shipped.
 
 ```bash
 harbor farm status
+harbor farm watch
 harbor farm plant 0 wheat
 harbor farm harvest 0
+harbor farm connect A1B2C3D4
+harbor farm visit A1B2C3D4
+harbor farm forage A1B2C3D4 2
 harbor farm telemetry serve
 ```
 
@@ -276,6 +280,9 @@ Harbor Studio:
 - `harbor_farm_status` — read Farm profile, plots, usage, and active sessions
 - `harbor_farm_plant` — plant `wheat`, `carrot`, or `tomato` in plot `0`-`5`
 - `harbor_farm_harvest` — harvest a ready plot
+- `harbor_farm_connect` — connect a friend using an eight-character Farm code
+- `harbor_farm_visit` — inspect a connected neighbor's ready plots and revealed session crops
+- `harbor_farm_forage` — gather one limited clipping from a neighbor's ready crop
 
 Use `harbor mcp` from Claude Code, Codex CLI, the Codex IDE extension, or the
 Codex app. Farm telemetry remains opt-in and metadata-only; MCP tools do not

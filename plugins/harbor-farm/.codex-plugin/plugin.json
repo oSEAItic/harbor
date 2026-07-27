@@ -1,6 +1,6 @@
 {
   "name": "harbor-farm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Grow session-native crops and visit friends while coding agents run.",
   "author": {
     "name": "oSEAItic",
@@ -20,9 +20,9 @@
     "capabilities": ["Interactive", "Write"],
     "websiteURL": "https://github.com/oSEAItic/harbor",
     "defaultPrompt": [
-      "Open my Harbor Farm and show what is growing.",
-      "Visit a Farm neighbor with me while this task runs.",
-      "Show the session crops my agents have discovered."
+      "Open my playable Harbor Farm.",
+      "Let me harvest or plant while this Agent works.",
+      "Open my Farm and show any neighbor activity."
     ],
     "brandColor": "#8FA66A"
   },

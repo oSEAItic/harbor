@@ -278,6 +278,7 @@ The Harbor MCP server exposes the same account-owned Farm ledger as the CLI and
 Harbor Studio:
 
 - `harbor_farm_status` — read Farm profile, plots, usage, and active sessions
+- `harbor_farm_open` — render the playable MCP Apps Farm card; prefer this for human-facing Farm requests
 - `harbor_farm_plant` — plant `wheat`, `carrot`, or `tomato` in plot `0`-`5`
 - `harbor_farm_harvest` — harvest a ready plot
 - `harbor_farm_connect` — connect a friend using an eight-character Farm code
@@ -287,6 +288,8 @@ Harbor Studio:
 Use `harbor mcp` from Claude Code, Codex CLI, the Codex IDE extension, or the
 Codex app. Farm telemetry remains opt-in and metadata-only; MCP tools do not
 grant access to prompts, outputs, tool arguments, file content, or provider keys.
+Hosts without MCP Apps UI can continue to use `harbor_farm_status` and the
+individual mutation tools as a headless fallback.
 
 ---
 

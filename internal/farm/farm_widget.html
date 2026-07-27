@@ -1,0 +1,1000 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #263326;
+      --muted: #66715d;
+      --paper: #f7f0d8;
+      --cream: #fffaf0;
+      --moss: #46653b;
+      --leaf: #719653;
+      --lime: #a8c56f;
+      --sun: #e0ae4b;
+      --soil: #765039;
+      --soil-dark: #4a3328;
+      --water: #76a7a0;
+      --danger: #a64e3e;
+      --line: #31442c26;
+      --shadow: 0 18px 40px #33402a26;
+      font-family: ui-rounded, "Avenir Next", "Trebuchet MS", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: transparent; }
+    body { padding: 4px; color: var(--ink); }
+    button, input { font: inherit; }
+    button { touch-action: manipulation; }
+
+    .farm-shell {
+      position: relative;
+      overflow: hidden;
+      max-width: 920px;
+      min-height: 430px;
+      margin: 0 auto;
+      border: 1px solid #42533835;
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 82% 5%, #fff6bd 0 8%, transparent 8.3%),
+        linear-gradient(180deg, #dfeec6 0 34%, #b9d394 34.2% 48%, #8aa86b 48.2% 49%, #6f8b55 49.2% 100%);
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+
+    .farm-shell::before,
+    .farm-shell::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      pointer-events: none;
+    }
+    .farm-shell::before {
+      width: 260px;
+      height: 80px;
+      left: -50px;
+      top: 142px;
+      border-radius: 50% 60% 0 0;
+      background: #668a59;
+      box-shadow: 170px -25px 0 #7da066, 420px 4px 0 #6f945f, 680px -18px 0 #739766;
+      opacity: .48;
+    }
+    .farm-shell::after {
+      width: 150%;
+      height: 180px;
+      left: -20%;
+      bottom: -120px;
+      border-radius: 50%;
+      border: 18px solid #b99a5a55;
+      transform: rotate(-4deg);
+    }
+
+    .topbar {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 16px;
+      border-bottom: 1px solid #31442c20;
+      background: #fffaf0c9;
+      backdrop-filter: blur(12px);
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      position: relative;
+      flex: 0 0 auto;
+      border-radius: 14px 14px 18px 18px;
+      background: linear-gradient(145deg, #e9c65f, #b86f38);
+      box-shadow: inset 0 -5px 0 #8b4d2b33, 0 6px 14px #7d5e2833;
+    }
+    .brand-mark::before {
+      content: "";
+      position: absolute;
+      width: 10px;
+      height: 25px;
+      left: 16px;
+      top: 9px;
+      border-radius: 7px 7px 3px 3px;
+      background: #fff3c1;
+      box-shadow: 0 0 0 3px #9b6331;
+    }
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 6px;
+      left: 11px;
+      top: 6px;
+      border-radius: 8px;
+      background: #506a45;
+    }
+    .brand-copy { min-width: 0; }
+    .brand-copy strong { display: block; font-size: 16px; letter-spacing: -.02em; }
+    .brand-copy span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+    .wallet { display: flex; align-items: center; gap: 8px; }
+    .wallet-pill {
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 20px auto;
+      align-items: center;
+      column-gap: 7px;
+      padding: 5px 11px;
+      border: 1px solid #765c2530;
+      border-radius: 14px;
+      background: #fff7dcdb;
+    }
+    .coin {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border: 2px solid #bc7b2c;
+      border-radius: 50%;
+      color: #8b5b20;
+      background: #f1c451;
+      font-size: 10px;
+      font-weight: 900;
+      box-shadow: inset 0 0 0 2px #ffe693;
+    }
+    .wallet-pill b { font-size: 13px; line-height: 1; }
+    .wallet-pill small { grid-column: 2; color: var(--muted); font-size: 8px; line-height: 1; }
+    .icon-button {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #41513725;
+      border-radius: 14px;
+      color: var(--moss);
+      background: #fffaf0cf;
+      cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease;
+    }
+    .icon-button:hover { background: #fff; transform: translateY(-1px); }
+    .icon-button:active { transform: scale(.96); }
+    .icon-button svg { width: 18px; height: 18px; }
+
+    .game-grid {
+      display: grid;
+      grid-template-columns: minmax(235px, .78fr) minmax(360px, 1.4fr);
+      gap: 13px;
+      padding: 13px;
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid #31442c2b;
+      border-radius: 19px;
+      background: #fffaf0dc;
+      box-shadow: 0 11px 26px #3141281f;
+      backdrop-filter: blur(9px);
+    }
+
+    .session-panel {
+      min-height: 295px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      position: relative;
+    }
+    .eyebrow {
+      color: #5b744d;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .session-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; padding: 14px 15px 0; }
+    .session-head small { color: var(--muted); font-size: 9px; text-align: right; }
+    .session-stage {
+      display: grid;
+      grid-template-columns: 105px minmax(0, 1fr);
+      align-items: center;
+      gap: 4px;
+      padding: 4px 13px 9px;
+    }
+    .session-copy { min-width: 0; }
+    .session-copy h2 { margin: 2px 0 4px; font-size: 19px; line-height: 1.05; letter-spacing: -.045em; }
+    .session-copy p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.4; text-transform: capitalize; }
+    .session-copy .rarity { color: #84632d; font-weight: 800; }
+    .progress-track {
+      height: 8px;
+      overflow: hidden;
+      margin-top: 11px;
+      border-radius: 99px;
+      background: #40533220;
+    }
+    .progress-track i {
+      height: 100%;
+      display: block;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #789c58, #d0b453);
+      box-shadow: 0 0 10px #d1b85177;
+      transition: width 360ms ease-out;
+    }
+    .receipt-line { margin-top: 5px; color: #718066; font-size: 8px; }
+
+    .session-art {
+      --crop-hue: 92;
+      width: 92px;
+      height: 116px;
+      position: relative;
+      display: block;
+      filter: drop-shadow(0 10px 7px #2c3c2644);
+    }
+    .session-art::before {
+      content: "";
+      width: 48px;
+      height: 17px;
+      position: absolute;
+      left: 22px;
+      bottom: 5px;
+      border-radius: 50%;
+      background: #6d4b33;
+      box-shadow: inset 0 5px 5px #39241c55;
+    }
+    .session-stem {
+      width: 7px;
+      height: 54px;
+      position: absolute;
+      left: 43px;
+      bottom: 18px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #446b36, #86aa58 58%, #39552f);
+      transform-origin: 50% 100%;
+      animation: sway 2.5s ease-in-out infinite alternate;
+    }
+    .session-leaf {
+      width: 33px;
+      height: 16px;
+      position: absolute;
+      left: 44px;
+      bottom: 48px;
+      border-radius: 90% 10% 90% 10%;
+      background: hsl(calc(var(--crop-hue) * 1deg) 37% 43%);
+      transform: rotate(-25deg);
+      transform-origin: 0 50%;
+      box-shadow: -30px 8px 0 -2px hsl(calc((var(--crop-hue) + 28) * 1deg) 34% 38%);
+    }
+    .session-fruit {
+      width: 47px;
+      height: 47px;
+      position: absolute;
+      left: 23px;
+      bottom: 61px;
+      border: 2px solid #fff8;
+      border-radius: 48% 52% 46% 54%;
+      background:
+        radial-gradient(circle at 35% 26%, #fff8 0 7%, transparent 8%),
+        hsl(calc((var(--crop-hue) + 49) * 1deg) 58% 54%);
+      box-shadow: inset -8px -8px 12px #0002, 0 7px 14px #26351f3b;
+      animation: fruit-pop 420ms cubic-bezier(.18,.9,.28,1.25) both;
+    }
+    .stage-seed .session-stem { height: 18px; }
+    .stage-seed .session-leaf, .stage-seed .session-fruit { opacity: 0; transform: scale(.3); }
+    .stage-sprout .session-fruit { opacity: .15; transform: scale(.5); }
+    .stage-bloom .session-fruit { opacity: .7; transform: scale(.78); }
+    .rarity-rare .session-fruit, .rarity-epic .session-fruit { box-shadow: inset -8px -8px 12px #0002, 0 0 20px #d9b84eb8; }
+
+    .session-history {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 47px;
+      padding: 8px 12px;
+      border-top: 1px solid var(--line);
+      background: #f3e8c98f;
+    }
+    .history-dot {
+      width: 29px;
+      height: 29px;
+      position: relative;
+      border: 2px solid #fff9;
+      border-radius: 50%;
+      background: hsl(calc(var(--dot-hue) * 1deg) 48% 56%);
+      box-shadow: 0 3px 8px #2c3b252d;
+    }
+    .history-dot::after { content: ""; width: 8px; height: 6px; position: absolute; left: 9px; top: -5px; border-radius: 80% 10%; background: #5d7c47; transform: rotate(-18deg); }
+    .history-copy { margin-left: 3px; min-width: 0; color: var(--muted); font-size: 9px; line-height: 1.3; }
+    .history-copy b { display: block; overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+
+    .field-panel { min-height: 295px; display: grid; grid-template-rows: auto auto 1fr; }
+    .field-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px 8px; }
+    .field-head h2 { margin: 2px 0 0; font-size: 16px; letter-spacing: -.035em; }
+    .field-head span:last-child { color: var(--muted); font-size: 9px; }
+
+    .quest {
+      min-height: 50px;
+      display: grid;
+      grid-template-columns: 33px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      margin: 0 11px 9px;
+      padding: 7px 8px;
+      border: 1px solid #b5893b42;
+      border-radius: 13px;
+      background: linear-gradient(90deg, #fff0b6d9, #f8df91bf);
+      box-shadow: inset 3px 0 #d39b35;
+    }
+    .quest-mark {
+      width: 31px;
+      height: 31px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #7a541c;
+      background: #ffe89b;
+    }
+    .quest-mark svg { width: 17px; height: 17px; }
+    .quest-copy { min-width: 0; }
+    .quest-copy b { display: block; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .quest-copy small { display: block; margin-top: 2px; color: #786c4e; font-size: 8px; }
+    .quest button,
+    .primary-button {
+      min-height: 38px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 11px;
+      color: #fffaf0;
+      background: linear-gradient(180deg, #5d7f4e, #3f6038);
+      box-shadow: 0 5px 11px #31472d3b, inset 0 1px #ffffff40;
+      cursor: pointer;
+      font-size: 9px;
+      font-weight: 800;
+      transition: transform 140ms ease, filter 140ms ease;
+    }
+    .quest button:hover, .primary-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .quest button:active, .primary-button:active { transform: scale(.96); }
+    button:disabled { cursor: wait; opacity: .58; }
+
+    .plot-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0 11px 11px;
+    }
+    .plot {
+      min-width: 0;
+      min-height: 91px;
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 4px;
+      padding: 9px 6px 7px;
+      border: 1px solid #3e2b2038;
+      border-radius: 15px;
+      color: #f7ecd7;
+      background:
+        repeating-linear-gradient(172deg, transparent 0 12px, #2c1c161c 13px 14px),
+        linear-gradient(145deg, var(--soil), var(--soil-dark));
+      box-shadow: inset 0 -11px 18px #291a1661, 0 5px 10px #25321f24;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+    .plot:hover { transform: translateY(-2px); border-color: #f3d68c99; box-shadow: inset 0 -11px 18px #291a1661, 0 8px 14px #25321f40; }
+    .plot:active { transform: scale(.97); }
+    .plot.ready { border-color: #ffe68f; box-shadow: inset 0 -11px 18px #291a1661, 0 0 0 2px #f7d26766, 0 0 19px #efd05b70; animation: ready-glow 1.6s ease-in-out infinite alternate; }
+    .plot.empty { border-style: dashed; background: linear-gradient(145deg, #856044, #543a2c); }
+    .plot.empty::before {
+      content: "+";
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #f7e8c05c;
+      border-radius: 50%;
+      color: #ffe8ac;
+      background: #3e2b2173;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .plot-crop {
+      width: 42px;
+      height: 43px;
+      position: relative;
+      filter: drop-shadow(0 5px 4px #22171288);
+    }
+    .plot-crop::before {
+      content: "";
+      width: 5px;
+      height: 29px;
+      position: absolute;
+      left: 19px;
+      bottom: 0;
+      border-radius: 5px;
+      background: #82a450;
+      box-shadow: -9px -3px 0 -2px #658b48, 9px -9px 0 -2px #769b4b;
+      transform: rotate(-2deg);
+    }
+    .crop-wheat::after { content: ""; width: 13px; height: 23px; position: absolute; left: 15px; top: 0; border-radius: 70% 20%; background: repeating-linear-gradient(0deg, #d59e3e 0 4px, #f2cf6c 5px 7px); transform: rotate(8deg); }
+    .crop-carrot::after { content: ""; width: 18px; height: 25px; position: absolute; left: 13px; top: 17px; border-radius: 60% 60% 80% 80%; background: #dc7138; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+    .crop-tomato::after { content: ""; width: 28px; height: 26px; position: absolute; left: 8px; top: 11px; border-radius: 48%; background: radial-gradient(circle at 32% 28%, #fff7 0 8%, transparent 9%), #cb5b42; box-shadow: inset -5px -5px #91392c55; }
+    .plot b { overflow: hidden; max-width: 100%; font-size: 9px; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }
+    .plot small { color: #f5dab0; font-size: 8px; font-variant-numeric: tabular-nums; }
+    .plot.empty b { margin-top: 1px; color: #ffe9bd; }
+    .plot.empty small { color: #d7bd94; }
+
+    .social-bar {
+      grid-column: 1 / -1;
+      min-height: 66px;
+      display: grid;
+      grid-template-columns: minmax(190px, .8fr) minmax(260px, 1.4fr);
+      gap: 0;
+    }
+    .farm-code {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 13px;
+      border-right: 1px solid var(--line);
+      background: #f0e2bf8f;
+    }
+    .code-seal {
+      width: 37px;
+      height: 37px;
+      position: relative;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      border: 2px dashed #8e7046;
+      background: #fff4cd;
+    }
+    .code-seal::before, .code-seal::after { content: ""; position: absolute; background: #648350; }
+    .code-seal::before { width: 5px; height: 21px; left: 15px; top: 9px; border-radius: 5px; }
+    .code-seal::after { width: 17px; height: 8px; left: 15px; top: 10px; border-radius: 80% 10%; transform: rotate(-24deg); transform-origin: 0 50%; }
+    .code-copy { min-width: 0; flex: 1; }
+    .code-copy small { display: block; color: var(--muted); font-size: 8px; }
+    .code-copy b { display: block; margin-top: 3px; color: #6d512b; font-family: "Avenir Next", monospace; font-size: 13px; letter-spacing: .12em; }
+    .copy-code {
+      min-width: 44px;
+      min-height: 38px;
+      padding: 0 10px;
+      border: 1px solid #6c56352b;
+      border-radius: 11px;
+      color: #5c6e4f;
+      background: #fff9e9b5;
+      cursor: pointer;
+      font-size: 8px;
+      font-weight: 800;
+    }
+
+    .neighbor-strip { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 9px 11px; }
+    .neighbor-card {
+      min-width: 150px;
+      min-height: 45px;
+      display: grid;
+      grid-template-columns: 31px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 7px;
+      border: 1px solid #3b51322e;
+      border-radius: 13px;
+      color: var(--ink);
+      background: #fffaf0bd;
+      cursor: pointer;
+      text-align: left;
+    }
+    .neighbor-avatar { width: 30px; height: 30px; position: relative; border-radius: 12px 12px 15px 15px; background: linear-gradient(145deg, #99b66f, #55784d); }
+    .neighbor-avatar::after { content: ""; width: 13px; height: 15px; position: absolute; left: 8px; top: 8px; border-radius: 50% 50% 45% 45%; background: #f6d4a3; box-shadow: 0 -5px 0 -2px #604b32; }
+    .neighbor-card span { min-width: 0; }
+    .neighbor-card b, .neighbor-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .neighbor-card b { font-size: 9px; }
+    .neighbor-card small { margin-top: 2px; color: var(--muted); font-size: 7px; }
+    .ready-badge { padding: 3px 6px; border-radius: 99px; color: #6d4a16; background: #f5d774; font-size: 7px; font-weight: 900; }
+    .neighbor-empty { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; width: 100%; color: var(--muted); font-size: 9px; }
+    .neighbor-connect { display: flex; gap: 5px; }
+    .neighbor-connect input { width: 92px; height: 38px; padding: 0 8px; border: 1px solid #35462e35; border-radius: 10px; outline: 0; color: var(--ink); background: #fffdf3; font-size: 9px; text-transform: uppercase; }
+    .neighbor-connect input:focus { border-color: #668453; box-shadow: 0 0 0 3px #66845322; }
+    .neighbor-connect button { min-width: 44px; min-height: 38px; padding: 0 9px; border: 0; border-radius: 10px; color: white; background: var(--moss); cursor: pointer; font-size: 8px; font-weight: 800; }
+
+    .sheet {
+      position: absolute;
+      z-index: 10;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background: #24312273;
+      backdrop-filter: blur(5px);
+      animation: fade-in 160ms ease-out both;
+    }
+    .sheet[hidden] { display: none; }
+    .sheet-card {
+      width: min(430px, 100%);
+      overflow: hidden;
+      border: 1px solid #fff7;
+      border-radius: 20px;
+      background: var(--cream);
+      box-shadow: 0 24px 60px #1c271b55;
+      animation: sheet-in 220ms cubic-bezier(.18,.85,.32,1.12) both;
+    }
+    .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 15px 9px; }
+    .sheet-head h3 { margin: 2px 0 0; font-size: 17px; letter-spacing: -.035em; }
+    .sheet-close { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 12px; color: var(--muted); background: #e8dfc9; cursor: pointer; font-size: 18px; }
+    .seed-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 12px 14px; }
+    .seed-option {
+      min-height: 122px;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 7px;
+      padding: 10px 6px;
+      border: 1px solid #3e4e3428;
+      border-radius: 15px;
+      color: var(--ink);
+      background: linear-gradient(165deg, #fbf5e6, #eadfbd);
+      cursor: pointer;
+      transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .seed-option:hover { transform: translateY(-3px); border-color: #80945f; box-shadow: 0 9px 18px #33412824; }
+    .seed-option .plot-crop { transform: scale(1.15); }
+    .seed-option b { font-size: 11px; text-transform: capitalize; }
+    .seed-option small { color: var(--muted); font-size: 8px; text-align: center; line-height: 1.4; }
+    .seed-price { padding: 3px 7px; border-radius: 99px; color: #694d1f; background: #efd075; font-size: 8px; font-weight: 900; }
+
+    .visit-card { width: min(560px, 100%); }
+    .visit-summary { padding: 0 15px 7px; color: var(--muted); font-size: 9px; }
+    .visit-plots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 8px 12px 14px; }
+    .visit-plot { min-height: 76px; display: grid; place-items: center; align-content: center; gap: 4px; padding: 7px; border: 1px solid #684b3438; border-radius: 13px; color: #fff5de; background: linear-gradient(145deg, #7a543c, #4a3328); }
+    .visit-plot button { min-height: 32px; margin-top: 2px; padding: 0 9px; border: 0; border-radius: 9px; color: #4b3b1c; background: #f1d26f; cursor: pointer; font-size: 8px; font-weight: 900; }
+    .visit-plot b { font-size: 9px; text-transform: capitalize; }
+    .visit-plot small { color: #decba9; font-size: 7px; }
+
+    .toast {
+      position: absolute;
+      z-index: 30;
+      left: 50%;
+      bottom: 12px;
+      max-width: calc(100% - 24px);
+      padding: 9px 13px;
+      border-radius: 12px;
+      color: #fff;
+      background: #2f4630e8;
+      box-shadow: 0 9px 22px #1b291b55;
+      font-size: 9px;
+      font-weight: 700;
+      transform: translate(-50%, 20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .toast.error { background: #853f34ed; }
+
+    .loading {
+      min-height: 430px;
+      display: grid;
+      place-items: center;
+      color: #52694a;
+      background: linear-gradient(180deg, #e5f0cf, #8cab69);
+    }
+    .loading-plant { width: 56px; height: 68px; position: relative; animation: sway 1.5s ease-in-out infinite alternate; }
+    .loading-plant::before { content: ""; width: 7px; height: 48px; position: absolute; left: 25px; bottom: 0; border-radius: 7px; background: #507b43; }
+    .loading-plant::after { content: ""; width: 30px; height: 16px; position: absolute; left: 27px; top: 15px; border-radius: 90% 10%; background: #82a95c; box-shadow: -30px 18px 0 #6f9854; transform: rotate(-18deg); }
+    .loading span { display: block; margin-top: 10px; font-size: 11px; font-weight: 800; }
+
+    .warning { padding: 7px 12px; color: #7d382d; background: #f5c0aa; font-size: 8px; }
+
+    button:focus-visible, input:focus-visible { outline: 3px solid #2f5d47; outline-offset: 2px; }
+
+    @keyframes sway { from { transform: rotate(-2deg); } to { transform: rotate(3deg); } }
+    @keyframes fruit-pop { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: scale(1); } }
+    @keyframes ready-glow { from { filter: brightness(1); } to { filter: brightness(1.1); } }
+    @keyframes fade-in { from { opacity: 0; } }
+    @keyframes sheet-in { from { opacity: 0; transform: translateY(15px) scale(.97); } }
+
+    @media (max-width: 680px) {
+      .game-grid { grid-template-columns: 1fr; }
+      .session-panel { min-height: 220px; }
+      .session-stage { grid-template-columns: 88px minmax(0,1fr); }
+      .session-art { transform: scale(.82); transform-origin: center; }
+      .social-bar { grid-column: auto; grid-template-columns: 1fr; }
+      .farm-code { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+
+    @media (max-width: 440px) {
+      body { padding: 0; }
+      .farm-shell { border-radius: 18px; }
+      .topbar { padding-inline: 11px; }
+      .brand-copy span { display: none; }
+      .game-grid { padding: 9px; }
+      .plot-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .plot { min-height: 98px; }
+      .quest { grid-template-columns: 30px minmax(0,1fr); }
+      .quest button { grid-column: 1 / -1; width: 100%; min-height: 42px; }
+      .seed-list { grid-template-columns: 1fr; }
+      .seed-option { min-height: 86px; grid-template-columns: 50px minmax(0,1fr) auto; text-align: left; }
+      .visit-plots { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main id="app" aria-live="polite">
+    <div class="loading"><div><i class="loading-plant"></i><span>Walking to Harbor Farm...</span></div></div>
+  </main>
+
+  <script>
+    (() => {
+      const app = document.getElementById("app");
+      const pending = new Map();
+      let requestId = 1;
+      let farm = null;
+      let busy = false;
+      let selectedPlot = null;
+      let visiting = null;
+      let toastTimer = null;
+
+      const icons = {
+        refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
+        spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></svg>'
+      };
+
+      function esc(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (ch) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[ch]);
+      }
+
+      function clamp(value, min, max) {
+        const number = Number(value);
+        return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : min;
+      }
+
+      function send(method, params) {
+        const id = requestId++;
+        window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+        return new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            pending.delete(id);
+            reject(new Error("Harbor did not respond in time."));
+          }, 20000);
+          pending.set(id, { resolve, reject, timeout });
+        });
+      }
+
+      async function callTool(name, args = {}) {
+        if (window.openai?.callTool) return window.openai.callTool(name, args);
+        return send("tools/call", { name, arguments: args });
+      }
+
+      function structured(result) {
+        return result?.structuredContent ?? result?.result?.structuredContent ?? null;
+      }
+
+      function consumeFarm(result) {
+        const next = structured(result);
+        if (next?.profile && Array.isArray(next?.plots)) {
+          farm = next;
+          render();
+          return true;
+        }
+        return false;
+      }
+
+      window.addEventListener("message", (event) => {
+        if (event.source !== window.parent) return;
+        const message = event.data;
+        if (!message || message.jsonrpc !== "2.0") return;
+
+        if (message.id !== undefined && pending.has(message.id)) {
+          const item = pending.get(message.id);
+          pending.delete(message.id);
+          window.clearTimeout(item.timeout);
+          if (message.error) item.reject(new Error(message.error.message || "Harbor tool failed."));
+          else item.resolve(message.result);
+          return;
+        }
+
+        if (message.method === "ui/notifications/tool-result") {
+          const next = message.params?.structuredContent ? { structuredContent: message.params.structuredContent } : message.params;
+          consumeFarm(next);
+        }
+      }, { passive: true });
+
+      function plotReady(plot) {
+        return Boolean(plot?.crop_type && plot?.ready_at && new Date(plot.ready_at).getTime() <= Date.now());
+      }
+
+      function secondsLeft(plot) {
+        if (!plot?.ready_at) return 0;
+        return Math.max(0, Math.ceil((new Date(plot.ready_at).getTime() - Date.now()) / 1000));
+      }
+
+      function waitLabel(seconds) {
+        if (seconds <= 0) return "Ready";
+        if (seconds < 60) return `${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        const remain = seconds % 60;
+        return remain ? `${minutes}m ${remain}s` : `${minutes}m`;
+      }
+
+      function cropArt(type) {
+        const crop = ["wheat", "carrot", "tomato"].includes(type) ? type : "wheat";
+        return `<i class="plot-crop crop-${crop}" aria-hidden="true"></i>`;
+      }
+
+      function latestSessionCrop() {
+        return Array.isArray(farm?.session_crops) ? farm.session_crops[0] : null;
+      }
+
+      function sessionPanel() {
+        const crops = Array.isArray(farm.session_crops) ? farm.session_crops : [];
+        const crop = crops[0];
+        const active = clamp(farm.active_session_count ?? (Array.isArray(farm.active_sessions) ? farm.active_sessions.length : 0), 0, 999);
+        if (!crop) {
+          return `<section class="panel session-panel">
+            <div class="session-head"><div><span class="eyebrow">Session nursery</span></div><small>${active ? `${active} agent online` : "Waiting for an agent"}</small></div>
+            <div class="session-stage">
+              <span class="session-art stage-seed" style="--crop-hue:92"><i class="session-stem"></i><i class="session-leaf"></i><i class="session-fruit"></i></span>
+              <div class="session-copy"><h2>Your next run is a mystery</h2><p>Start a connected Agent session to grow a one-of-one crop.</p><div class="progress-track"><i style="width:0%"></i></div><div class="receipt-line">Metadata only. No prompts or files.</div></div>
+            </div>
+            <div class="session-history"><div class="history-copy"><b>The nursery is quiet.</b>Every Agent run leaves a collectible seed.</div></div>
+          </section>`;
+        }
+        const stage = ["seed", "sprout", "bloom", "revealed"].includes(crop.stage) ? crop.stage : "seed";
+        const rarity = ["unrevealed", "common", "uncommon", "rare", "epic"].includes(crop.rarity) ? crop.rarity : "common";
+        const hue = clamp(crop.genome?.hue, 0, 359);
+        const history = crops.slice(1, 5).map((item) => `<i class="history-dot" style="--dot-hue:${clamp(item.genome?.hue,0,359)}" title="${esc(item.display_name)}"></i>`).join("");
+        const eventCount = clamp(crop.receipt?.event_count, 0, 9999);
+        return `<section class="panel session-panel rarity-${rarity}">
+          <div class="session-head"><div><span class="eyebrow">Session nursery</span></div><small>${active ? `${active} agent online` : stage === "revealed" ? "Run keepsake" : "Growing safely"}</small></div>
+          <div class="session-stage">
+            <span class="session-art stage-${stage}" style="--crop-hue:${hue}"><i class="session-stem"></i><i class="session-leaf"></i><i class="session-fruit"></i></span>
+            <div class="session-copy"><h2>${esc(crop.display_name)}</h2><p><span class="rarity">${esc(rarity)}</span> / ${esc(crop.genome?.trait || stage)} / ${esc(crop.genome?.marking || "forming")}</p><div class="progress-track" role="progressbar" aria-label="Session crop growth" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${clamp(crop.progress,0,100)}"><i style="width:${clamp(crop.progress,0,100)}%"></i></div><div class="receipt-line">${clamp(crop.progress,0,100)}% / ${eventCount} safe events / metadata only</div></div>
+          </div>
+          <div class="session-history">${history || ""}<div class="history-copy"><b>${crops.length} session ${crops.length === 1 ? "crop" : "crops"} collected</b>${history ? "Each genome is unique to its run." : "Your next run will join this shelf."}</div></div>
+        </section>`;
+      }
+
+      function nextQuest() {
+        const plots = Array.isArray(farm.plots) ? farm.plots : [];
+        const ready = plots.find(plotReady);
+        if (ready) return { kind: "harvest", plot: ready.plot_index, title: `${ready.crop_type} is ready`, note: "Harvest now before checking a neighbor.", action: "Harvest" };
+        const empty = plots.find((plot) => !plot.crop_type);
+        if (empty) return { kind: "plant", plot: empty.plot_index, crop: "wheat", title: "Start a one-minute wheat", note: "Your fastest path to the first harvest.", action: "Plant -5" };
+        const soonest = [...plots].filter((plot) => plot.ready_at).sort((a,b) => secondsLeft(a) - secondsLeft(b))[0];
+        if (soonest) return { kind: "wait", title: `${soonest.crop_type} grows beside your Agent`, note: `${waitLabel(secondsLeft(soonest))} until it is ready.`, action: "Growing" };
+        return { kind: "wait", title: "The field is resting", note: "Refresh when an Agent session begins.", action: "Refresh" };
+      }
+
+      function plotCard(plot) {
+        if (!plot.crop_type) {
+          return `<button class="plot empty" data-action="choose-seed" data-plot="${plot.plot_index}" aria-label="Plant plot ${plot.plot_index + 1}" ${busy ? "disabled" : ""}><b>Open soil</b><small>Choose a seed</small></button>`;
+        }
+        const ready = plotReady(plot);
+        return `<button class="plot ${ready ? "ready" : ""}" data-action="${ready ? "harvest" : "none"}" data-plot="${plot.plot_index}" aria-label="${ready ? `Harvest ${esc(plot.crop_type)}` : `${esc(plot.crop_type)} ready in ${waitLabel(secondsLeft(plot))}`}" ${busy || !ready ? "disabled" : ""}>${cropArt(plot.crop_type)}<b>${esc(plot.crop_type)}</b><small>${ready ? "Harvest now" : waitLabel(secondsLeft(plot))}</small></button>`;
+      }
+
+      function fieldPanel() {
+        const quest = nextQuest();
+        const plots = Array.isArray(farm.plots) ? farm.plots : [];
+        return `<section class="panel field-panel">
+          <div class="field-head"><div><span class="eyebrow">The six plots</span><h2>One small action, then back to coding</h2></div><span>Level ${clamp(farm.profile?.level,1,999)}</span></div>
+          <div class="quest"><span class="quest-mark">${icons.spark}</span><span class="quest-copy"><b>${esc(quest.title)}</b><small>${esc(quest.note)}</small></span><button data-action="quest" data-kind="${quest.kind}" data-plot="${quest.plot ?? ""}" ${busy ? "disabled" : ""}>${esc(quest.action)}</button></div>
+          <div class="plot-grid">${plots.map(plotCard).join("")}</div>
+        </section>`;
+      }
+
+      function socialBar() {
+        const social = farm.social || { farm_code: "", neighbors: [] };
+        const neighbors = Array.isArray(social.neighbors) ? social.neighbors : [];
+        const cards = neighbors.map((neighbor) => `<button class="neighbor-card" data-action="visit" data-code="${esc(neighbor.farm_code)}" ${busy ? "disabled" : ""}><i class="neighbor-avatar" aria-hidden="true"></i><span><b>${esc(neighbor.display_name)}</b><small>Level ${clamp(neighbor.level,1,999)} / ${clamp(neighbor.session_crops,0,999)} discoveries</small></span>${neighbor.ready_plots ? `<em class="ready-badge">${clamp(neighbor.ready_plots,0,6)} ready</em>` : ""}</button>`).join("");
+        const empty = `<div class="neighbor-empty"><span>No neighbors yet. Exchange Farm codes and leave footprints.</span><form class="neighbor-connect" id="neighbor-form"><input id="neighbor-code" maxlength="8" pattern="[A-Za-z0-9]{8}" aria-label="Friend Farm code" placeholder="FARM CODE"><button type="submit" ${busy ? "disabled" : ""}>Add</button></form></div>`;
+        return `<section class="panel social-bar">
+          <div class="farm-code"><i class="code-seal" aria-hidden="true"></i><span class="code-copy"><small>Your Farm code</small><b>${esc(social.farm_code || "--------")}</b></span><button class="copy-code" data-action="copy-code">Copy</button></div>
+          <div class="neighbor-strip">${cards || empty}</div>
+        </section>`;
+      }
+
+      function seedSheet() {
+        const crops = farm.crops || {};
+        const options = ["wheat", "carrot", "tomato"].map((type) => {
+          const crop = crops[type] || {};
+          const seconds = clamp(crop.grow_seconds, 0, 99999);
+          const label = seconds < 60 ? `${seconds}s` : `${Math.ceil(seconds / 60)} min`;
+          return `<button class="seed-option" data-action="plant" data-crop="${type}" ${busy || Number(farm.profile?.coins || 0) < Number(crop.cost || 0) ? "disabled" : ""}>${cropArt(type)}<span><b>${esc(type)}</b><small>${label} to grow<br>harvest +${clamp(crop.reward,0,999)}</small></span><em class="seed-price">-${clamp(crop.cost,0,999)}</em></button>`;
+        }).join("");
+        return `<div class="sheet" id="seed-sheet" ${selectedPlot === null ? "hidden" : ""}><section class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="seed-title"><div class="sheet-head"><div><span class="eyebrow">Plot ${Number(selectedPlot) + 1}</span><h3 id="seed-title">What should grow here?</h3></div><button class="sheet-close" data-action="close-sheet" aria-label="Close seed picker">x</button></div><div class="seed-list">${options}</div></section></div>`;
+      }
+
+      function visitSheet() {
+        if (!visiting) return "";
+        const plots = Array.isArray(visiting.plots) ? visiting.plots : [];
+        const body = plots.map((plot) => {
+          const can = Boolean(plot.can_forage);
+          return `<div class="visit-plot">${plot.crop_type ? cropArt(plot.crop_type) : ""}<b>${esc(plot.crop_type || "Open soil")}</b><small>${can ? "One clipping available" : plotReady(plot) ? "Clippings gathered" : plot.crop_type ? waitLabel(secondsLeft(plot)) : "Resting"}</small>${can ? `<button data-action="forage" data-code="${esc(visiting.farm_code)}" data-plot="${plot.plot_index}" ${busy ? "disabled" : ""}>Gather +2</button>` : ""}</div>`;
+        }).join("");
+        return `<div class="sheet"><section class="sheet-card visit-card" role="dialog" aria-modal="true" aria-labelledby="visit-title"><div class="sheet-head"><div><span class="eyebrow">Visiting ${esc(visiting.farm_code)}</span><h3 id="visit-title">${esc(visiting.display_name)}</h3></div><button class="sheet-close" data-action="close-visit" aria-label="Return to my Farm">x</button></div><div class="visit-summary">Level ${clamp(visiting.level,1,999)} / ${Array.isArray(visiting.session_crops) ? visiting.session_crops.length : 0} session discoveries / one clipping per crop</div><div class="visit-plots">${body}</div></section></div>`;
+      }
+
+      function render() {
+        if (!farm) return;
+        app.innerHTML = `<section class="farm-shell">${farm.warning ? `<div class="warning">Offline cache: ${esc(farm.warning)}</div>` : ""}<header class="topbar"><div class="brand"><i class="brand-mark" aria-hidden="true"></i><span class="brand-copy"><strong>Harbor Farm</strong><span>Play for a moment. Your Agent keeps working.</span></span></div><div class="wallet"><span class="wallet-pill"><i class="coin">H</i><b>${clamp(farm.profile?.coins,0,999999)}</b><small>FARM COINS</small></span><button class="icon-button" data-action="refresh" aria-label="Refresh Farm" ${busy ? "disabled" : ""}>${icons.refresh}</button></div></header><div class="game-grid">${sessionPanel()}${fieldPanel()}${socialBar()}</div>${seedSheet()}${visitSheet()}<div class="toast" id="farm-toast" role="status"></div></section>`;
+        bind();
+      }
+
+      function bind() {
+        app.querySelectorAll("[data-action]").forEach((element) => element.addEventListener("click", onAction));
+        const form = document.getElementById("neighbor-form");
+        if (form) form.addEventListener("submit", connectNeighbor);
+      }
+
+      async function onAction(event) {
+        const button = event.currentTarget;
+        const action = button.dataset.action;
+        if (action === "refresh") return refresh();
+        if (action === "copy-code") return copyCode();
+        if (action === "close-sheet") { selectedPlot = null; return render(); }
+        if (action === "close-visit") { visiting = null; return render(); }
+        if (action === "choose-seed") { selectedPlot = Number(button.dataset.plot); return render(); }
+        if (action === "plant") return plant(selectedPlot, button.dataset.crop);
+        if (action === "harvest") return harvest(Number(button.dataset.plot));
+        if (action === "visit") return visit(button.dataset.code);
+        if (action === "forage") return forage(button.dataset.code, Number(button.dataset.plot));
+        if (action === "quest") {
+          if (button.dataset.kind === "harvest") return harvest(Number(button.dataset.plot));
+          if (button.dataset.kind === "plant") return plant(Number(button.dataset.plot), "wheat");
+          return refresh();
+        }
+      }
+
+      function showToast(message, isError = false) {
+        const toast = document.getElementById("farm-toast");
+        if (!toast) return;
+        toast.textContent = message;
+        toast.className = `toast show${isError ? " error" : ""}`;
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => toast.className = "toast", 3200);
+      }
+
+      async function refresh(silent = false) {
+        if (busy) return;
+        busy = true;
+        render();
+        try {
+          const result = await callTool("harbor_farm_status", {});
+          if (!consumeFarm(result)) throw new Error("Harbor returned no Farm state.");
+          if (!silent) showToast("Farm refreshed.");
+        } catch (error) {
+          busy = false;
+          render();
+          showToast(error.message || String(error), true);
+          return;
+        }
+        busy = false;
+        render();
+      }
+
+      async function mutate(tool, args, success) {
+        if (busy) return;
+        busy = true;
+        render();
+        try {
+          const result = await callTool(tool, args);
+          if (result?.isError || result?.result?.isError) throw new Error("Harbor could not complete that action.");
+          const status = await callTool("harbor_farm_status", {});
+          if (!consumeFarm(status)) throw new Error("Action succeeded, but refresh failed.");
+          busy = false;
+          render();
+          showToast(success);
+        } catch (error) {
+          busy = false;
+          render();
+          showToast(error.message || String(error), true);
+        }
+      }
+
+      async function plant(plot, crop) {
+        if (!Number.isInteger(plot) || !["wheat", "carrot", "tomato"].includes(crop)) return;
+        selectedPlot = null;
+        await mutate("harbor_farm_plant", { plot_index: plot, crop_type: crop }, `${crop[0].toUpperCase() + crop.slice(1)} planted in plot ${plot + 1}.`);
+      }
+
+      async function harvest(plot) {
+        if (!Number.isInteger(plot)) return;
+        await mutate("harbor_farm_harvest", { plot_index: plot }, `Harvest gathered from plot ${plot + 1}.`);
+      }
+
+      async function connectNeighbor(event) {
+        event.preventDefault();
+        const code = String(document.getElementById("neighbor-code")?.value || "").trim().toUpperCase();
+        if (!/^[A-Z0-9]{8}$/.test(code)) return showToast("Enter an eight-character Farm code.", true);
+        await mutate("harbor_farm_connect", { farm_code: code }, `Connected to Farm ${code}.`);
+      }
+
+      async function visit(code) {
+        if (busy || !code) return;
+        busy = true;
+        render();
+        try {
+          const result = await callTool("harbor_farm_visit", { farm_code: code });
+          visiting = structured(result);
+          if (!visiting?.plots) throw new Error("Neighbor Farm did not load.");
+          busy = false;
+          render();
+        } catch (error) {
+          busy = false;
+          render();
+          showToast(error.message || String(error), true);
+        }
+      }
+
+      async function forage(code, plot) {
+        if (busy) return;
+        busy = true;
+        render();
+        try {
+          const result = await callTool("harbor_farm_forage", { farm_code: code, plot_index: plot });
+          if (result?.isError || result?.result?.isError) throw new Error("That clipping is no longer available.");
+          const [status, neighbor] = await Promise.all([
+            callTool("harbor_farm_status", {}),
+            callTool("harbor_farm_visit", { farm_code: code })
+          ]);
+          consumeFarm(status);
+          visiting = structured(neighbor);
+          busy = false;
+          render();
+          showToast("Clipping gathered. +2 Farm coins.");
+        } catch (error) {
+          busy = false;
+          render();
+          showToast(error.message || String(error), true);
+        }
+      }
+
+      async function copyCode() {
+        const code = farm?.social?.farm_code;
+        if (!code) return;
+        try {
+          await navigator.clipboard.writeText(code);
+          showToast("Farm code copied.");
+        } catch {
+          showToast(`Farm code: ${code}`);
+        }
+      }
+
+      const demoFarm = {
+        profile: { level: 3, xp: 248, coins: 76 },
+        crops: {
+          wheat: { cost: 5, reward: 12, grow_seconds: 60 },
+          carrot: { cost: 8, reward: 22, grow_seconds: 180 },
+          tomato: { cost: 12, reward: 35, grow_seconds: 300 }
+        },
+        plots: [
+          { plot_index: 0, crop_type: "wheat", ready_at: new Date(Date.now() - 1000).toISOString() },
+          { plot_index: 1, crop_type: null, ready_at: null },
+          { plot_index: 2, crop_type: "carrot", ready_at: new Date(Date.now() + 74000).toISOString() },
+          { plot_index: 3, crop_type: null, ready_at: null },
+          { plot_index: 4, crop_type: "tomato", ready_at: new Date(Date.now() + 183000).toISOString() },
+          { plot_index: 5, crop_type: null, ready_at: null }
+        ],
+        active_session_count: 1,
+        session_crops: [{ id: "demo", display_name: "Circuit Pumpkin", rarity: "rare", stage: "bloom", progress: 72, genome: { hue: 28, trait: "toolsmith", marking: "circuit" }, receipt: { event_count: 11 } }],
+        social: { farm_code: "TIDE7C2A", neighbors: [{ farm_code: "PIER8D1F", display_name: "Farmer PIER", level: 4, ready_plots: 1, session_crops: 7 }] }
+      };
+
+      const initialOutput = window.openai?.toolOutput;
+      if (initialOutput?.profile && Array.isArray(initialOutput?.plots)) {
+        farm = initialOutput;
+        render();
+      } else if (window.parent === window || location.protocol === "file:") {
+        farm = demoFarm;
+        render();
+      }
+
+      window.setInterval(() => {
+        if (farm && !busy && selectedPlot === null && !visiting) render();
+      }, 1000);
+    })();
+  </script>
+</body>
+</html>

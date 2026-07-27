@@ -37,6 +37,7 @@ func mcpTools(factory mcpClientFactory) []struct {
 		Tool    mcp.Tool
 		Handler server.ToolHandlerFunc
 	}{
+		{Tool: farmOpenTool(), Handler: makeFarmOpenHandler(factory)},
 		{Tool: farmStatusTool(), Handler: makeFarmStatusHandler(factory)},
 		{Tool: farmPlantTool(), Handler: makeFarmPlantHandler(factory)},
 		{Tool: farmHarvestTool(), Handler: makeFarmHarvestHandler(factory)},
@@ -148,7 +149,9 @@ func makeFarmStatusHandler(factory mcpClientFactory) server.ToolHandlerFunc {
 		if marshalErr != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("encoding Farm status: %v", marshalErr)), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		result := mcp.NewToolResultText(string(data))
+		result.StructuredContent = bootstrap
+		return result, nil
 	}
 }
 
@@ -222,7 +225,9 @@ func makeFarmVisitHandler(factory mcpClientFactory) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError("encoding neighbor Farm: " + err.Error()), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		result := mcp.NewToolResultText(string(data))
+		result.StructuredContent = neighbor
+		return result, nil
 	}
 }
 
@@ -245,6 +250,8 @@ func makeFarmForageHandler(factory mcpClientFactory) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError("encoding forage result: " + err.Error()), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		toolResult := mcp.NewToolResultText(string(data))
+		toolResult.StructuredContent = result
+		return toolResult, nil
 	}
 }

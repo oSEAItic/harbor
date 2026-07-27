@@ -286,9 +286,11 @@ harbor farm forage A1B2C3D4 2          # one clipping per visitor and crop
 harbor farm telemetry serve           # private OTLP JSON receiver on 127.0.0.1
 ```
 
-`harbor mcp` exposes the same status, planting, harvesting, neighbor connection,
-visiting, and foraging actions, so Claude Code and Codex CLI/IDE/App use the
-exact same account-owned ledger as the terminal and Harbor Studio.
+`harbor mcp` also exposes `harbor_farm_open`, an MCP Apps card with six clickable
+plots, seed selection, live growth timers, harvesting, Farm codes, neighbor
+visits, and foraging. The headless status and mutation tools remain available,
+so Claude Code and Codex CLI/IDE/App use the exact same account-owned ledger as
+the terminal and Harbor Studio even when a host cannot render the card.
 
 Each connected agent session also grows one session crop. It begins as a
 mystery seed, advances from metadata-only lifecycle events, and reveals a
@@ -304,8 +306,10 @@ outputs, tool arguments, and file content are discarded. Waiting earns no Farm
 coins, and the Farm ledger is separate from paid oSEAItic credits.
 
 The repository also includes the cross-client `plugins/harbor-farm` bundle and
-marketplace manifests for Codex and Claude Code. Both integrations launch the
-same `harbor mcp` process rather than creating a second Farm or credential store.
+marketplace manifests for Codex and Claude Code. Open a new Codex conversation
+after installing or updating the plugin, then ask `@Harbor Farm Open my playable
+Harbor Farm.` Both integrations launch the same `harbor mcp` process rather than
+creating a second Farm or credential store.
 
 ### Credential management
 

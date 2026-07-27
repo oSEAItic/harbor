@@ -57,6 +57,9 @@ func Serve(version string) error {
 	for _, farmTool := range farm.MCPTools(version) {
 		s.AddTool(farmTool.Tool, farmTool.Handler)
 	}
+	for _, farmResource := range farm.MCPResources() {
+		s.AddResource(farmResource.Resource, farmResource.Handler)
+	}
 
 	return server.ServeStdio(s)
 }

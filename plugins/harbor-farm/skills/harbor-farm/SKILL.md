@@ -9,14 +9,16 @@ Harbor owns one account-level Farm ledger shared by Codex, Claude Code, Harbor S
 
 ## Interaction loop
 
-1. Call `harbor_farm_status` before recommending or mutating anything.
-2. Briefly surface the most useful waiting-time action: harvest a ready plot, plant an empty plot, inspect the latest session crop, or visit a neighbor with ready crops.
-3. Use direct Farm tools for the user's chosen action. Planting, harvesting, and foraging change the shared ledger.
-4. After a mutation, call `harbor_farm_status` again only when the result does not already contain the updated state.
+1. Call `harbor_farm_open` whenever the user asks to open, view, check, or play with the Farm. It renders the interactive Farm card; do not replace it with a prose status report.
+2. Let the user plant, harvest, refresh, visit, and forage directly in the card. Do not narrate data that is already visible in the component.
+3. Use `harbor_farm_status` only for headless reasoning or when the host cannot render MCP Apps UI.
+4. When acting conversationally, surface only the most useful waiting-time action: harvest a ready plot, plant an empty plot, inspect the latest session crop, or visit a neighbor with ready crops.
+5. After a mutation, call `harbor_farm_status` again only when the result does not already contain the updated state.
 
 ## Tools
 
 - `harbor_farm_status`: profile, plots, active agents, mystery/session crops, Farm code, and neighbors.
+- `harbor_farm_open`: render the playable Farm card with direct actions. Prefer this for human-facing Farm requests.
 - `harbor_farm_plant`: plant wheat, carrot, or tomato in plot 0-5.
 - `harbor_farm_harvest`: harvest a ready plot.
 - `harbor_farm_connect`: connect a friend using an eight-character Farm code.

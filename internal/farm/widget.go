@@ -10,7 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-const farmWidgetURI = "ui://harbor-farm/field-v1.html"
+const farmWidgetURI = "ui://harbor-farm/field-v2.html"
 
 //go:embed farm_widget.html
 var farmWidgetHTML string

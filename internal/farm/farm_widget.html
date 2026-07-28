@@ -79,8 +79,7 @@
       gap: 12px;
       padding: 11px 16px;
       border-bottom: 1px solid #31442c20;
-      background: #fffaf0c9;
-      backdrop-filter: blur(12px);
+      background: #fffaf0ed;
     }
 
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -172,9 +171,8 @@
       overflow: hidden;
       border: 1px solid #31442c2b;
       border-radius: 19px;
-      background: #fffaf0dc;
+      background: #fffaf0ed;
       box-shadow: 0 11px 26px #3141281f;
-      backdrop-filter: blur(9px);
     }
 
     .session-panel {
@@ -248,7 +246,7 @@
       border-radius: 8px;
       background: linear-gradient(90deg, #446b36, #86aa58 58%, #39552f);
       transform-origin: 50% 100%;
-      animation: sway 2.5s ease-in-out infinite alternate;
+      animation: sway 2.5s ease-in-out 2 alternate;
     }
     .session-leaf {
       width: 33px;
@@ -381,7 +379,7 @@
     }
     .plot:hover { transform: translateY(-2px); border-color: #f3d68c99; box-shadow: inset 0 -11px 18px #291a1661, 0 8px 14px #25321f40; }
     .plot:active { transform: scale(.97); }
-    .plot.ready { border-color: #ffe68f; box-shadow: inset 0 -11px 18px #291a1661, 0 0 0 2px #f7d26766, 0 0 19px #efd05b70; animation: ready-glow 1.6s ease-in-out infinite alternate; }
+    .plot.ready { border-color: #ffe68f; box-shadow: inset 0 -11px 18px #291a1661, 0 0 0 2px #f7d26766, 0 0 19px #efd05b70; animation: ready-glow 1.6s ease-in-out 4 alternate; }
     .plot.empty { border-style: dashed; background: linear-gradient(145deg, #856044, #543a2c); }
     .plot.empty::before {
       content: "+";
@@ -634,6 +632,8 @@
       let selectedPlot = null;
       let visiting = null;
       let toastTimer = null;
+      let tickTimer = null;
+      let inViewport = true;
 
       const icons = {
         refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
@@ -670,11 +670,11 @@
         return result?.structuredContent ?? result?.result?.structuredContent ?? null;
       }
 
-      function consumeFarm(result) {
+      function consumeFarm(result, renderNow = true) {
         const next = structured(result);
         if (next?.profile && Array.isArray(next?.plots)) {
           farm = next;
-          render();
+          if (renderNow) render();
           return true;
         }
         return false;
@@ -720,10 +720,6 @@
       function cropArt(type) {
         const crop = ["wheat", "carrot", "tomato"].includes(type) ? type : "wheat";
         return `<i class="plot-crop crop-${crop}" aria-hidden="true"></i>`;
-      }
-
-      function latestSessionCrop() {
-        return Array.isArray(farm?.session_crops) ? farm.session_crops[0] : null;
       }
 
       function sessionPanel() {
@@ -819,17 +815,65 @@
       function render() {
         if (!farm) return;
         app.innerHTML = `<section class="farm-shell">${farm.warning ? `<div class="warning">Offline cache: ${esc(farm.warning)}</div>` : ""}<header class="topbar"><div class="brand"><i class="brand-mark" aria-hidden="true"></i><span class="brand-copy"><strong>Harbor Farm</strong><span>Play for a moment. Your Agent keeps working.</span></span></div><div class="wallet"><span class="wallet-pill"><i class="coin">H</i><b>${clamp(farm.profile?.coins,0,999999)}</b><small>FARM COINS</small></span><button class="icon-button" data-action="refresh" aria-label="Refresh Farm" ${busy ? "disabled" : ""}>${icons.refresh}</button></div></header><div class="game-grid">${sessionPanel()}${fieldPanel()}${socialBar()}</div>${seedSheet()}${visitSheet()}<div class="toast" id="farm-toast" role="status"></div></section>`;
-        bind();
+        scheduleTick();
       }
 
-      function bind() {
-        app.querySelectorAll("[data-action]").forEach((element) => element.addEventListener("click", onAction));
-        const form = document.getElementById("neighbor-form");
-        if (form) form.addEventListener("submit", connectNeighbor);
+      function stopTick() {
+        if (tickTimer !== null) window.clearTimeout(tickTimer);
+        tickTimer = null;
+      }
+
+      function hasGrowingPlots() {
+        return Array.isArray(farm?.plots) && farm.plots.some((plot) => plot.crop_type && secondsLeft(plot) > 0);
+      }
+
+      function scheduleTick() {
+        stopTick();
+        if (!farm || busy || selectedPlot !== null || visiting || document.hidden || !inViewport || !hasGrowingPlots()) return;
+        const delay = 1000 - (Date.now() % 1000) + 24;
+        tickTimer = window.setTimeout(() => {
+          tickTimer = null;
+          if (!updateTimers()) scheduleTick();
+        }, delay);
+      }
+
+      function updateText(element, value) {
+        if (element && element.textContent !== value) element.textContent = value;
+      }
+
+      function updateTimers() {
+        if (!farm || document.hidden || !inViewport) return false;
+        let becameReady = false;
+        for (const plot of farm.plots || []) {
+          if (!plot.crop_type || !plot.ready_at) continue;
+          const button = app.querySelector(`.plot[data-plot="${plot.plot_index}"]`);
+          const remaining = secondsLeft(plot);
+          if (remaining <= 0 && button?.dataset.action === "none") {
+            becameReady = true;
+            break;
+          }
+          if (remaining > 0 && button) {
+            const label = waitLabel(remaining);
+            updateText(button.querySelector("small"), label);
+            button.setAttribute("aria-label", `${plot.crop_type} ready in ${label}`);
+          }
+        }
+        if (becameReady) {
+          render();
+          return true;
+        }
+        const quest = nextQuest();
+        const questButton = app.querySelector('[data-action="quest"]');
+        if (quest.kind === "wait" && questButton?.dataset.kind === "wait") {
+          updateText(app.querySelector(".quest-copy b"), quest.title);
+          updateText(app.querySelector(".quest-copy small"), quest.note);
+        }
+        return false;
       }
 
       async function onAction(event) {
-        const button = event.currentTarget;
+        const button = event.target.closest?.("[data-action]");
+        if (!button || !app.contains(button)) return;
         const action = button.dataset.action;
         if (action === "refresh") return refresh();
         if (action === "copy-code") return copyCode();
@@ -862,7 +906,7 @@
         render();
         try {
           const result = await callTool("harbor_farm_status", {});
-          if (!consumeFarm(result)) throw new Error("Harbor returned no Farm state.");
+          if (!consumeFarm(result, false)) throw new Error("Harbor returned no Farm state.");
           if (!silent) showToast("Farm refreshed.");
         } catch (error) {
           busy = false;
@@ -882,7 +926,7 @@
           const result = await callTool(tool, args);
           if (result?.isError || result?.result?.isError) throw new Error("Harbor could not complete that action.");
           const status = await callTool("harbor_farm_status", {});
-          if (!consumeFarm(status)) throw new Error("Action succeeded, but refresh failed.");
+          if (!consumeFarm(status, false)) throw new Error("Action succeeded, but refresh failed.");
           busy = false;
           render();
           showToast(success);
@@ -939,7 +983,7 @@
             callTool("harbor_farm_status", {}),
             callTool("harbor_farm_visit", { farm_code: code })
           ]);
-          consumeFarm(status);
+          consumeFarm(status, false);
           visiting = structured(neighbor);
           busy = false;
           render();
@@ -991,9 +1035,25 @@
         render();
       }
 
-      window.setInterval(() => {
-        if (farm && !busy && selectedPlot === null && !visiting) render();
-      }, 1000);
+      app.addEventListener("click", onAction);
+      app.addEventListener("submit", (event) => {
+        if (event.target.id === "neighbor-form") connectNeighbor(event);
+      });
+      document.addEventListener("visibilitychange", scheduleTick, { passive: true });
+
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(([entry]) => {
+          inViewport = Boolean(entry?.isIntersecting);
+          scheduleTick();
+        });
+        observer.observe(app);
+        window.addEventListener("pagehide", () => {
+          observer.disconnect();
+          stopTick();
+        }, { once: true });
+      } else {
+        window.addEventListener("pagehide", stopTick, { once: true });
+      }
     })();
   </script>
 </body>

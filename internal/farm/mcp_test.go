@@ -62,6 +62,22 @@ func TestMCPFarmWidgetUsesPortableAppsResourceAndDirectTools(t *testing.T) {
 			t.Fatalf("Farm widget is missing %q", required)
 		}
 	}
+	for _, required := range []string{"IntersectionObserver", "visibilitychange", "function updateTimers()", "app.addEventListener(\"click\""} {
+		if !strings.Contains(html.Text, required) {
+			t.Fatalf("Farm widget is missing idle-performance guard %q", required)
+		}
+	}
+	for _, forbidden := range []string{"window.setInterval", "function bind()"} {
+		if strings.Contains(html.Text, forbidden) {
+			t.Fatalf("Farm widget still contains full-render loop %q", forbidden)
+		}
+	}
+	if got := strings.Count(html.Text, "app.innerHTML ="); got != 1 {
+		t.Fatalf("Farm widget has %d whole-tree render sites, want 1", got)
+	}
+	if got := strings.Count(html.Text, "infinite"); got != 1 {
+		t.Fatalf("Farm widget has %d infinite animations, want only the loading indicator", got)
+	}
 }
 
 func TestMCPFarmWidgetStateOmitsAccountAndRawSessionIdentifiers(t *testing.T) {

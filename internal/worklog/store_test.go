@@ -192,6 +192,72 @@ func TestReopenedFeatureContinuesCycle(t *testing.T) {
 	}
 }
 
+func TestFeatureEventCommitEvidence(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewStoreAt(filepath.Join(t.TempDir(), "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	feature, err := store.CreateFeature(ctx, "harbor", "Commit evidence", "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddEventWithCommit(ctx, feature.ID, EventCheckpoint, "tests pass", "", "ABCDEF1234567"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddEventWithCommit(ctx, feature.ID, EventCheckpoint, "", "", "HEAD"); err == nil {
+		t.Fatal("symbolic commit reference should be rejected")
+	}
+	detail, err := store.Detail(ctx, feature.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := detail.Events[len(detail.Events)-1]
+	if got.CommitSHA != "abcdef1234567" || got.Note != "tests pass" {
+		t.Fatalf("unexpected commit evidence: %+v", got)
+	}
+}
+
+func TestMigratesV2EventTable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worklog.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statements := []string{
+		`CREATE TABLE schema_version (version INTEGER NOT NULL)`,
+		`INSERT INTO schema_version(version) VALUES (2)`,
+		`CREATE TABLE features (id TEXT PRIMARY KEY, project TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT '', size TEXT NOT NULL DEFAULT '', budget_seconds INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+		`CREATE TABLE feature_events (id INTEGER PRIMARY KEY AUTOINCREMENT, feature_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE, kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)`,
+		`INSERT INTO features VALUES ('feat_old', 'harbor', 'Old feature', '', '', 0, 'active', '2026-07-01T00:00:00Z', '2026-07-01T00:00:00Z')`,
+		`INSERT INTO feature_events(feature_id, kind, note, created_at) VALUES ('feat_old', 'checkpoint', 'legacy proof', '2026-07-01T01:00:00Z')`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := NewStoreAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	detail, err := store.Detail(context.Background(), "feat_old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Events) != 1 || detail.Events[0].CommitSHA != "" {
+		t.Fatalf("unexpected migrated event: %+v", detail.Events)
+	}
+}
+
 func TestMigratesV1SessionTable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "worklog.db")
 	db, err := sql.Open("sqlite", path)

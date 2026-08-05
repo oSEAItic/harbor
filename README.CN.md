@@ -230,7 +230,8 @@ harbor feature bind feat_abc123 \
 
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
-harbor feature verify feat_abc123 --note "acceptance tests pass"
+harbor feature checkpoint feat_abc123 --commit <git-sha> --note "working checkpoint"
+harbor feature verify feat_abc123 --commit <git-sha> --note "acceptance tests pass"
 harbor feature ship feat_abc123
 
 harbor worklog report --since 7d
@@ -240,6 +241,9 @@ harbor worklog serve                    # http://127.0.0.1:4737
 
 可以设置 `HARBOR_MODEL` 自动记录当前模型，也可以显式传入 `--model`。模型信息按
 session 保存，因为同一个 feature 可能跨多个 conversation 和模型完成。
+
+`checkpoint` 和 `verify` 可以把证据绑定到 Git commit。Harbor 只记录 SHA，
+不会创建或修改 commit。
 
 新增范围必须明确记录为 `include`、`swap`、`defer` 或 `reject`：
 

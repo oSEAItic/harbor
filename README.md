@@ -243,7 +243,8 @@ harbor feature bind feat_abc123 \
 
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
-harbor feature verify feat_abc123 --note "acceptance tests pass"
+harbor feature checkpoint feat_abc123 --commit <git-sha> --note "working checkpoint"
+harbor feature verify feat_abc123 --commit <git-sha> --note "acceptance tests pass"
 harbor feature ship feat_abc123
 
 harbor worklog report --since 7d
@@ -254,6 +255,9 @@ harbor worklog serve                    # http://127.0.0.1:4737
 Set `HARBOR_MODEL` to attach the active model automatically, or pass `--model`
 explicitly. Model identity is stored per session because one feature can span
 multiple conversations and models.
+
+`checkpoint` and `verify` can optionally anchor their evidence to a Git commit.
+Harbor stores the SHA on the event; it never creates or modifies a commit.
 
 Scope additions are recorded explicitly as `include`, `swap`, `defer`, or
 `reject` decisions:

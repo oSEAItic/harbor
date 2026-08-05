@@ -38,6 +38,7 @@ type Event struct {
 	Kind      string    `json:"kind"`
 	Note      string    `json:"note,omitempty"`
 	SessionID string    `json:"session_id,omitempty"`
+	CommitSHA string    `json:"commit_sha,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

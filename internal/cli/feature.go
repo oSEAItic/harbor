@@ -18,12 +18,12 @@ func newFeatureCmd(outputFormat *string) *cobra.Command {
 		newFeatureListCmd(outputFormat),
 		newFeatureShowCmd(outputFormat),
 		newFeatureBindCmd(),
-		newFeatureEventCmd("checkpoint", worklog.EventCheckpoint, "Record a working checkpoint"),
-		newFeatureEventCmd("block", worklog.EventBlocked, "Mark a feature as blocked"),
-		newFeatureEventCmd("resume", worklog.EventResumed, "Resume a blocked feature"),
-		newFeatureEventCmd("verify", worklog.EventVerified, "Mark acceptance criteria as verified"),
-		newFeatureEventCmd("ship", worklog.EventShipped, "Mark a verified feature as shipped"),
-		newFeatureEventCmd("reopen", worklog.EventReopened, "Reopen a verified or shipped feature"),
+		newFeatureEventCmd("checkpoint", worklog.EventCheckpoint, "Record a working checkpoint", true),
+		newFeatureEventCmd("block", worklog.EventBlocked, "Mark a feature as blocked", false),
+		newFeatureEventCmd("resume", worklog.EventResumed, "Resume a blocked feature", false),
+		newFeatureEventCmd("verify", worklog.EventVerified, "Mark acceptance criteria as verified", true),
+		newFeatureEventCmd("ship", worklog.EventShipped, "Mark a verified feature as shipped", false),
+		newFeatureEventCmd("reopen", worklog.EventReopened, "Reopen a verified or shipped feature", false),
 		newFeatureScopeCmd(),
 	)
 	return cmd
@@ -132,7 +132,11 @@ func newFeatureShowCmd(outputFormat *string) *cobra.Command {
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "\n\nTimeline:")
 			for _, event := range detail.Events {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s  %-10s %s\n", event.CreatedAt.Local().Format("2006-01-02 15:04"), event.Kind, event.Note)
+				evidence := event.Note
+				if event.CommitSHA != "" {
+					evidence = strings.TrimSpace(evidence + " @ " + event.CommitSHA)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s  %-10s %s\n", event.CreatedAt.Local().Format("2006-01-02 15:04"), event.Kind, evidence)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "\nSessions: %d  Models: %s  Scope changes: %d\n", len(detail.Sessions), formatSessionModels(detail.Sessions), len(detail.Scope))
 			return nil
@@ -179,8 +183,8 @@ func newFeatureBindCmd() *cobra.Command {
 	return cmd
 }
 
-func newFeatureEventCmd(use, event, short string) *cobra.Command {
-	var note, session string
+func newFeatureEventCmd(use, event, short string, allowCommit bool) *cobra.Command {
+	var note, session, commitSHA string
 	cmd := &cobra.Command{
 		Use: use + " <feature-id>", Short: short, Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -192,7 +196,7 @@ func newFeatureEventCmd(use, event, short string) *cobra.Command {
 				return err
 			}
 			defer store.Close()
-			feature, err := store.AddEvent(cmd.Context(), args[0], event, note, session)
+			feature, err := store.AddEventWithCommit(cmd.Context(), args[0], event, note, session, commitSHA)
 			if err != nil {
 				return err
 			}
@@ -202,6 +206,9 @@ func newFeatureEventCmd(use, event, short string) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&note, "note", "", "Optional event note")
 	cmd.Flags().StringVar(&session, "session", "", "Optional Harbor session ID")
+	if allowCommit {
+		cmd.Flags().StringVar(&commitSHA, "commit", "", "Optional Git commit SHA anchoring this evidence")
+	}
 	return cmd
 }
 

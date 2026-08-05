@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -16,7 +17,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
+
+var commitSHAPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,64}$`)
 
 type Store struct {
 	db  *sql.DB
@@ -70,6 +73,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			kind TEXT NOT NULL,
 			note TEXT NOT NULL DEFAULT '',
 			session_id TEXT NOT NULL DEFAULT '',
+			commit_sha TEXT NOT NULL DEFAULT '',
 			created_at TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_feature_events_feature_time ON feature_events(feature_id, created_at)`,
@@ -105,6 +109,9 @@ func (s *Store) migrate(ctx context.Context) error {
 		return fmt.Errorf("worklog schema version %d is newer than supported version %d", currentVersion.Int64, schemaVersion)
 	}
 	if err := s.ensureColumn(ctx, "feature_sessions", "model_name", `TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if err := s.ensureColumn(ctx, "feature_events", "commit_sha", `TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
 	if currentVersion.Valid && currentVersion.Int64 == schemaVersion {
@@ -185,10 +192,22 @@ func (s *Store) CreateFeature(ctx context.Context, project, title, kind, size st
 }
 
 func (s *Store) AddEvent(ctx context.Context, featureID, kind, note, sessionID string) (Feature, error) {
-	return s.addEventAt(ctx, featureID, kind, note, sessionID, s.now())
+	return s.AddEventWithCommit(ctx, featureID, kind, note, sessionID, "")
 }
 
 func (s *Store) addEventAt(ctx context.Context, featureID, kind, note, sessionID string, at time.Time) (Feature, error) {
+	return s.addEventAtWithCommit(ctx, featureID, kind, note, sessionID, "", at)
+}
+
+func (s *Store) AddEventWithCommit(ctx context.Context, featureID, kind, note, sessionID, commitSHA string) (Feature, error) {
+	return s.addEventAtWithCommit(ctx, featureID, kind, note, sessionID, commitSHA, s.now())
+}
+
+func (s *Store) addEventAtWithCommit(ctx context.Context, featureID, kind, note, sessionID, commitSHA string, at time.Time) (Feature, error) {
+	commitSHA = strings.ToLower(strings.TrimSpace(commitSHA))
+	if commitSHA != "" && !commitSHAPattern.MatchString(commitSHA) {
+		return Feature{}, errors.New("commit SHA must be 7 to 64 hexadecimal characters")
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Feature{}, err
@@ -202,8 +221,8 @@ func (s *Store) addEventAt(ctx context.Context, featureID, kind, note, sessionID
 	if err != nil {
 		return Feature{}, err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO feature_events(feature_id, kind, note, session_id, created_at) VALUES (?, ?, ?, ?, ?)`,
-		f.ID, kind, strings.TrimSpace(note), strings.TrimSpace(sessionID), formatTime(at)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO feature_events(feature_id, kind, note, session_id, commit_sha, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		f.ID, kind, strings.TrimSpace(note), strings.TrimSpace(sessionID), commitSHA, formatTime(at)); err != nil {
 		return Feature{}, fmt.Errorf("recording feature event: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE features SET status = ?, updated_at = ? WHERE id = ?`, next, formatTime(at), f.ID); err != nil {
@@ -399,14 +418,14 @@ func (s *Store) Detail(ctx context.Context, id string) (Detail, error) {
 		Sessions: make([]SessionBinding, 0),
 		Scope:    make([]ScopeItem, 0),
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, feature_id, kind, note, session_id, created_at FROM feature_events WHERE feature_id = ? ORDER BY created_at, id`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, feature_id, kind, note, session_id, commit_sha, created_at FROM feature_events WHERE feature_id = ? ORDER BY created_at, id`, id)
 	if err != nil {
 		return Detail{}, err
 	}
 	for rows.Next() {
 		var e Event
 		var at string
-		if err := rows.Scan(&e.ID, &e.FeatureID, &e.Kind, &e.Note, &e.SessionID, &at); err != nil {
+		if err := rows.Scan(&e.ID, &e.FeatureID, &e.Kind, &e.Note, &e.SessionID, &e.CommitSHA, &at); err != nil {
 			rows.Close()
 			return Detail{}, err
 		}

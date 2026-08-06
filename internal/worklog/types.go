@@ -38,6 +38,7 @@ type Event struct {
 	Kind      string    `json:"kind"`
 	Note      string    `json:"note,omitempty"`
 	SessionID string    `json:"session_id,omitempty"`
+	CommitSHA string    `json:"commit_sha,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -60,11 +61,34 @@ type ScopeItem struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type CheckpointSummary struct {
+	ID            int64     `json:"id"`
+	FeatureID     string    `json:"feature_id"`
+	RepoPath      string    `json:"repo_path"`
+	BaseSHA       string    `json:"base_sha"`
+	HeadSHA       string    `json:"head_sha"`
+	Outcome       string    `json:"outcome"`
+	Decisions     []string  `json:"decisions"`
+	Verification  []string  `json:"verification"`
+	Remaining     []string  `json:"remaining"`
+	SessionID     string    `json:"session_id,omitempty"`
+	Source        string    `json:"source,omitempty"`
+	ModelName     string    `json:"model_name,omitempty"`
+	SchemaVersion int       `json:"schema_version"`
+	GeneratedAt   time.Time `json:"generated_at"`
+}
+
+type FeatureContext struct {
+	Match  string  `json:"match"`
+	Detail *Detail `json:"detail,omitempty"`
+}
+
 type Detail struct {
-	Feature  Feature          `json:"feature"`
-	Events   []Event          `json:"events"`
-	Sessions []SessionBinding `json:"sessions"`
-	Scope    []ScopeItem      `json:"scope"`
+	Feature             Feature             `json:"feature"`
+	Events              []Event             `json:"events"`
+	Sessions            []SessionBinding    `json:"sessions"`
+	Scope               []ScopeItem         `json:"scope"`
+	CheckpointSummaries []CheckpointSummary `json:"checkpoint_summaries"`
 }
 
 type FeatureStats struct {

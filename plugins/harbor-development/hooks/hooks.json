@@ -1,0 +1,33 @@
+{
+  "description": "Detect stable Git checkpoints and load explicit Harbor Feature context without collecting conversation content.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/harbor_hook.py\"",
+            "timeout": 3,
+            "statusMessage": "Loading Harbor Feature context",
+            "additionalContextLimit": 700
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/harbor_hook.py\"",
+            "timeout": 3,
+            "statusMessage": "Checking for a Harbor checkpoint",
+            "additionalContextLimit": 700
+          }
+        ]
+      }
+    ]
+  }
+}

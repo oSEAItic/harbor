@@ -4,28 +4,75 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/oseaitic/harbor/internal/gitevidence"
 	"github.com/oseaitic/harbor/internal/worklog"
 	"github.com/spf13/cobra"
 )
 
 func newFeatureCmd(outputFormat *string) *cobra.Command {
 	cmd := &cobra.Command{Use: "feature", Short: "Track feature delivery cycles locally"}
+	checkpoint := newFeatureEventCmd("checkpoint", worklog.EventCheckpoint, "Record a working checkpoint", true)
+	checkpoint.AddCommand(newFeatureCheckpointFinalizeCmd(outputFormat))
 	cmd.AddCommand(
 		newFeatureStartCmd(outputFormat),
 		newFeatureListCmd(outputFormat),
 		newFeatureShowCmd(outputFormat),
+		newFeatureContextCmd(outputFormat),
 		newFeatureBindCmd(),
-		newFeatureEventCmd("checkpoint", worklog.EventCheckpoint, "Record a working checkpoint"),
-		newFeatureEventCmd("block", worklog.EventBlocked, "Mark a feature as blocked"),
-		newFeatureEventCmd("resume", worklog.EventResumed, "Resume a blocked feature"),
-		newFeatureEventCmd("verify", worklog.EventVerified, "Mark acceptance criteria as verified"),
-		newFeatureEventCmd("ship", worklog.EventShipped, "Mark a verified feature as shipped"),
-		newFeatureEventCmd("reopen", worklog.EventReopened, "Reopen a verified or shipped feature"),
+		checkpoint,
+		newFeatureEventCmd("block", worklog.EventBlocked, "Mark a feature as blocked", false),
+		newFeatureEventCmd("resume", worklog.EventResumed, "Resume a blocked feature", false),
+		newFeatureEventCmd("verify", worklog.EventVerified, "Mark acceptance criteria as verified", true),
+		newFeatureEventCmd("ship", worklog.EventShipped, "Mark a verified feature as shipped", false),
+		newFeatureEventCmd("reopen", worklog.EventReopened, "Reopen a verified or shipped feature", false),
 		newFeatureScopeCmd(),
 	)
+	return cmd
+}
+
+func newFeatureContextCmd(outputFormat *string) *cobra.Command {
+	var session, repo, branch, project string
+	cmd := &cobra.Command{
+		Use:   "context",
+		Short: "Resolve the current feature without guessing or creating one",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if session == "" {
+				session = strings.TrimSpace(os.Getenv("HARBOR_SESSION"))
+			}
+			if repo == "" {
+				repo, _ = os.Getwd()
+			}
+			if project == "" && repo != "" {
+				project = filepath.Base(filepath.Clean(repo))
+			}
+			store, err := worklog.NewStore()
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			context, err := store.ResolveFeatureContext(cmd.Context(), session, repo, branch, project)
+			if err != nil {
+				return err
+			}
+			if *outputFormat == "json" {
+				return printJSON(cmd, context)
+			}
+			if context.Detail == nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "No feature context (%s).\n", context.Match)
+				return nil
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s  %s [%s]\n", context.Detail.Feature.ID, context.Detail.Feature.Title, context.Match)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&session, "session", "", "Agent session ID (defaults to HARBOR_SESSION)")
+	cmd.Flags().StringVar(&repo, "repo", "", "Repository path (defaults to current directory)")
+	cmd.Flags().StringVar(&branch, "branch", "", "Current Git branch")
+	cmd.Flags().StringVar(&project, "project", "", "Project name (defaults to repository directory name)")
 	return cmd
 }
 
@@ -132,7 +179,11 @@ func newFeatureShowCmd(outputFormat *string) *cobra.Command {
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "\n\nTimeline:")
 			for _, event := range detail.Events {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s  %-10s %s\n", event.CreatedAt.Local().Format("2006-01-02 15:04"), event.Kind, event.Note)
+				evidence := event.Note
+				if event.CommitSHA != "" {
+					evidence = strings.TrimSpace(evidence + " @ " + event.CommitSHA)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s  %-10s %s\n", event.CreatedAt.Local().Format("2006-01-02 15:04"), event.Kind, evidence)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "\nSessions: %d  Models: %s  Scope changes: %d\n", len(detail.Sessions), formatSessionModels(detail.Sessions), len(detail.Scope))
 			return nil
@@ -179,8 +230,8 @@ func newFeatureBindCmd() *cobra.Command {
 	return cmd
 }
 
-func newFeatureEventCmd(use, event, short string) *cobra.Command {
-	var note, session string
+func newFeatureEventCmd(use, event, short string, allowCommit bool) *cobra.Command {
+	var note, session, commitSHA string
 	cmd := &cobra.Command{
 		Use: use + " <feature-id>", Short: short, Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -192,7 +243,7 @@ func newFeatureEventCmd(use, event, short string) *cobra.Command {
 				return err
 			}
 			defer store.Close()
-			feature, err := store.AddEvent(cmd.Context(), args[0], event, note, session)
+			feature, err := store.AddEventWithCommit(cmd.Context(), args[0], event, note, session, commitSHA)
 			if err != nil {
 				return err
 			}
@@ -202,6 +253,66 @@ func newFeatureEventCmd(use, event, short string) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&note, "note", "", "Optional event note")
 	cmd.Flags().StringVar(&session, "session", "", "Optional Harbor session ID")
+	if allowCommit {
+		cmd.Flags().StringVar(&commitSHA, "commit", "", "Optional Git commit SHA anchoring this evidence")
+	}
+	return cmd
+}
+
+func newFeatureCheckpointFinalizeCmd(outputFormat *string) *cobra.Command {
+	var repo, baseSHA, headSHA, outcome, session, source, model string
+	var decisions, verification, remaining []string
+	cmd := &cobra.Command{
+		Use:   "finalize <feature-id>",
+		Short: "Save an Agent-authored summary for a verified Git commit range",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if repo == "" {
+				repo, _ = os.Getwd()
+			}
+			if session == "" {
+				session = strings.TrimSpace(os.Getenv("HARBOR_SESSION"))
+			}
+			if model == "" {
+				model = strings.TrimSpace(os.Getenv("HARBOR_MODEL"))
+			}
+			resolved, err := gitevidence.Resolve(repo, baseSHA, headSHA)
+			if err != nil {
+				return err
+			}
+			store, err := worklog.NewStore()
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			summary, err := store.UpsertCheckpointSummary(cmd.Context(), worklog.CheckpointSummary{
+				FeatureID: args[0], RepoPath: resolved.RepoPath, BaseSHA: resolved.BaseSHA, HeadSHA: resolved.HeadSHA,
+				Outcome: outcome, Decisions: decisions, Verification: verification, Remaining: remaining,
+				SessionID: session, Source: source, ModelName: model, SchemaVersion: 1,
+			})
+			if err != nil {
+				return err
+			}
+			if *outputFormat == "json" {
+				return printJSON(cmd, summary)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Summarized %s at %s..%s\n", summary.FeatureID, summary.BaseSHA[:12], summary.HeadSHA[:12])
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&repo, "repo", "", "Git repository path (defaults to current directory)")
+	cmd.Flags().StringVar(&baseSHA, "base", "", "Base commit SHA before the summarized work")
+	cmd.Flags().StringVar(&headSHA, "head", "", "Head commit SHA after the summarized work")
+	cmd.Flags().StringVar(&outcome, "outcome", "", "Programmer-readable outcome delivered by this checkpoint")
+	cmd.Flags().StringArrayVar(&decisions, "decision", nil, "Important product or architecture decision (repeatable)")
+	cmd.Flags().StringArrayVar(&verification, "verification", nil, "Verification evidence (repeatable)")
+	cmd.Flags().StringArrayVar(&remaining, "remaining", nil, "Known unfinished or deferred work (repeatable)")
+	cmd.Flags().StringVar(&session, "session", "", "Agent session ID (defaults to HARBOR_SESSION)")
+	cmd.Flags().StringVar(&source, "source", "", "Agent source, such as codex or claude-code")
+	cmd.Flags().StringVar(&model, "model", "", "Model name (defaults to HARBOR_MODEL)")
+	_ = cmd.MarkFlagRequired("base")
+	_ = cmd.MarkFlagRequired("head")
+	_ = cmd.MarkFlagRequired("outcome")
 	return cmd
 }
 

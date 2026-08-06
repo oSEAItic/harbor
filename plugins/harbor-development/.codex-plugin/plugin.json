@@ -1,0 +1,27 @@
+{
+  "name": "harbor-development",
+  "version": "0.1.0",
+  "description": "Turn stable Git checkpoints into auditable, outcome-level Harbor summaries.",
+  "author": {
+    "name": "oSEAItic",
+    "url": "https://github.com/oSEAItic"
+  },
+  "homepage": "https://github.com/oSEAItic/harbor",
+  "repository": "https://github.com/oSEAItic/harbor",
+  "license": "MIT",
+  "keywords": ["harbor", "git", "checkpoint", "agents", "audit"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Harbor Development",
+    "shortDescription": "Summarize durable Git checkpoints into Harbor.",
+    "longDescription": "Detects Git HEAD transitions without reading transcripts, then guides the current Agent to persist concise outcomes, decisions, verification, and remaining work in Harbor.",
+    "developerName": "oSEAItic",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Summarize and record my latest Git checkpoint in Harbor.",
+      "Show the Harbor Feature context for this repository."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

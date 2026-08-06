@@ -1,0 +1,4 @@
+interface:
+  display_name: "Summarize Harbor Checkpoint"
+  short_description: "Record outcome-level Git checkpoint summaries"
+  default_prompt: "Use $summarize-harbor-checkpoint to summarize and record the latest Git checkpoint in Harbor."

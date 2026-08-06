@@ -220,6 +220,78 @@ func TestFeatureEventCommitEvidence(t *testing.T) {
 	}
 }
 
+func TestCheckpointSummaryIsStructuredAndIdempotent(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewStoreAt(filepath.Join(t.TempDir(), "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	feature, err := store.CreateFeature(ctx, "harbor", "Checkpoint summaries", "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "0123456789abcdef0123456789abcdef01234567"
+	head := "89abcdef0123456789abcdef0123456789abcdef"
+	first, err := store.UpsertCheckpointSummary(ctx, CheckpointSummary{
+		FeatureID: feature.ID, RepoPath: "/tmp/repo", BaseSHA: base, HeadSHA: head,
+		Outcome: "Delivered the summary protocol", Decisions: []string{"Git remains authoritative", "Git remains authoritative"},
+		Verification: []string{"go test ./internal/worklog"}, SessionID: "thr_1", Source: "codex", ModelName: "gpt-5",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.UpsertCheckpointSummary(ctx, CheckpointSummary{
+		FeatureID: feature.ID, RepoPath: "/tmp/repo", BaseSHA: base, HeadSHA: head,
+		Outcome: "Delivered and verified the summary protocol", Remaining: []string{"Studio rendering"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID != second.ID {
+		t.Fatalf("summary id changed across upsert: %d != %d", first.ID, second.ID)
+	}
+	detail, err := store.Detail(ctx, feature.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.CheckpointSummaries) != 1 {
+		t.Fatalf("summaries = %d, want 1", len(detail.CheckpointSummaries))
+	}
+	got := detail.CheckpointSummaries[0]
+	if got.Outcome != "Delivered and verified the summary protocol" || len(got.Remaining) != 1 || got.SchemaVersion != 1 {
+		t.Fatalf("unexpected summary: %+v", got)
+	}
+}
+
+func TestResolveFeatureContextUsesDeterministicOrder(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewStoreAt(filepath.Join(t.TempDir(), "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	feature, err := store.CreateFeature(ctx, "harbor", "Context resolution", "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindSession(ctx, SessionBinding{FeatureID: feature.ID, HarborSessionID: "thr_1", ExternalSessionID: "external_1", RepoPath: "/tmp/repo", Branch: "feat/test"}); err != nil {
+		t.Fatal(err)
+	}
+	bySession, err := store.ResolveFeatureContext(ctx, "external_1", "/other", "main", "other")
+	if err != nil || bySession.Match != "session" || bySession.Detail == nil || bySession.Detail.Feature.ID != feature.ID {
+		t.Fatalf("unexpected session context: %+v, %v", bySession, err)
+	}
+	byRepo, err := store.ResolveFeatureContext(ctx, "", "/tmp/repo", "feat/test", "other")
+	if err != nil || byRepo.Match != "repository" || byRepo.Detail == nil || byRepo.Detail.Feature.ID != feature.ID {
+		t.Fatalf("unexpected repository context: %+v, %v", byRepo, err)
+	}
+	byProject, err := store.ResolveFeatureContext(ctx, "", "", "", "harbor")
+	if err != nil || byProject.Match != "project" || byProject.Detail == nil || byProject.Detail.Feature.ID != feature.ID {
+		t.Fatalf("unexpected project context: %+v, %v", byProject, err)
+	}
+}
+
 func TestMigratesV2EventTable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "worklog.db")
 	db, err := sql.Open("sqlite", path)

@@ -244,6 +244,12 @@ harbor feature bind feat_abc123 \
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
 harbor feature checkpoint feat_abc123 --commit <git-sha> --note "working checkpoint"
+harbor feature checkpoint finalize feat_abc123 \
+  --repo . --base <before-sha> --head <after-sha> \
+  --outcome "Implemented the resumable session workspace" \
+  --decision "Keep Git as the durable evidence source" \
+  --verification "npm run verify" \
+  --remaining "Add provider-neutral adapters"
 harbor feature verify feat_abc123 --commit <git-sha> --note "acceptance tests pass"
 harbor feature ship feat_abc123
 
@@ -258,6 +264,14 @@ multiple conversations and models.
 
 `checkpoint` and `verify` can optionally anchor their evidence to a Git commit.
 Harbor stores the SHA on the event; it never creates or modifies a commit.
+
+`checkpoint finalize` records a structured Agent summary for a real Git range.
+Harbor resolves both commits in the named repository, requires the base to be an
+ancestor of the head, and idempotently stores the outcome, decisions, actual
+verification, remaining work, session, source, and model. The bundled
+`plugins/harbor-development` Codex plugin detects `HEAD` transitions without
+reading transcripts and asks the current Agent to call this command or the
+equivalent `harbor_checkpoint_finalize` MCP tool.
 
 Scope additions are recorded explicitly as `include`, `swap`, `defer`, or
 `reject` decisions:

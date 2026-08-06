@@ -18,6 +18,7 @@ import (
 	"github.com/oseaitic/harbor/internal/protocol"
 	"github.com/oseaitic/harbor/internal/recall"
 	"github.com/oseaitic/harbor/internal/remember"
+	"github.com/oseaitic/harbor/internal/worklog"
 )
 
 // Serve starts a stdio MCP server that exposes all installed connectors as tools.
@@ -59,6 +60,10 @@ func Serve(version string) error {
 	}
 	for _, farmResource := range farm.MCPResources() {
 		s.AddResource(farmResource.Resource, farmResource.Handler)
+	}
+
+	for _, worklogTool := range worklog.MCPTools() {
+		s.AddTool(worklogTool.Tool, worklogTool.Handler)
 	}
 
 	return server.ServeStdio(s)

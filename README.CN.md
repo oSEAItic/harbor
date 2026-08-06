@@ -231,6 +231,12 @@ harbor feature bind feat_abc123 \
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
 harbor feature checkpoint feat_abc123 --commit <git-sha> --note "working checkpoint"
+harbor feature checkpoint finalize feat_abc123 \
+  --repo . --base <before-sha> --head <after-sha> \
+  --outcome "完成可恢复的 session workspace" \
+  --decision "Git 继续作为持久证据源" \
+  --verification "npm run verify" \
+  --remaining "补充 provider-neutral adapters"
 harbor feature verify feat_abc123 --commit <git-sha> --note "acceptance tests pass"
 harbor feature ship feat_abc123
 
@@ -244,6 +250,13 @@ session 保存，因为同一个 feature 可能跨多个 conversation 和模型�
 
 `checkpoint` 和 `verify` 可以把证据绑定到 Git commit。Harbor 只记录 SHA，
 不会创建或修改 commit。
+
+`checkpoint finalize` 会为真实 Git commit range 保存结构化 Agent 归纳。Harbor
+会在指定仓库中解析两个 commit，确认 base 是 head 的祖先，并按 Feature、仓库和
+range 幂等保存 outcome、decisions、实际 verification、remaining work、session、
+source 与 model。仓库内的 `plugins/harbor-development` Codex plugin 只检测 `HEAD`
+变化，不读取 transcript，再让当前 Agent 调用该命令或
+`harbor_checkpoint_finalize` MCP tool。
 
 新增范围必须明确记录为 `include`、`swap`、`defer` 或 `reject`：
 

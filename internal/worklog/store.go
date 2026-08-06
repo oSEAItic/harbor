@@ -3,6 +3,7 @@ package worklog
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -17,7 +18,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 var commitSHAPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,64}$`)
 
@@ -95,6 +96,24 @@ func (s *Store) migrate(ctx context.Context) error {
 			text TEXT NOT NULL,
 			created_at TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS checkpoint_summaries (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			feature_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+			repo_path TEXT NOT NULL,
+			base_sha TEXT NOT NULL,
+			head_sha TEXT NOT NULL,
+			outcome TEXT NOT NULL,
+			decisions_json TEXT NOT NULL DEFAULT '[]',
+			verification_json TEXT NOT NULL DEFAULT '[]',
+			remaining_json TEXT NOT NULL DEFAULT '[]',
+			session_id TEXT NOT NULL DEFAULT '',
+			source TEXT NOT NULL DEFAULT '',
+			model_name TEXT NOT NULL DEFAULT '',
+			schema_version INTEGER NOT NULL DEFAULT 1,
+			generated_at TEXT NOT NULL,
+			UNIQUE(feature_id, repo_path, base_sha, head_sha)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_checkpoint_summaries_feature_head ON checkpoint_summaries(feature_id, head_sha)`,
 	}
 	for _, statement := range statements {
 		if _, err := s.db.ExecContext(ctx, statement); err != nil {
@@ -346,6 +365,92 @@ func (s *Store) AddScope(ctx context.Context, featureID, decision, text string) 
 	return tx.Commit()
 }
 
+func (s *Store) UpsertCheckpointSummary(ctx context.Context, summary CheckpointSummary) (CheckpointSummary, error) {
+	summary.FeatureID = strings.TrimSpace(summary.FeatureID)
+	summary.RepoPath = filepath.Clean(strings.TrimSpace(summary.RepoPath))
+	summary.BaseSHA = strings.ToLower(strings.TrimSpace(summary.BaseSHA))
+	summary.HeadSHA = strings.ToLower(strings.TrimSpace(summary.HeadSHA))
+	summary.Outcome = strings.TrimSpace(summary.Outcome)
+	summary.SessionID = strings.TrimSpace(summary.SessionID)
+	summary.Source = strings.TrimSpace(summary.Source)
+	summary.ModelName = strings.TrimSpace(summary.ModelName)
+	summary.Decisions = cleanStrings(summary.Decisions)
+	summary.Verification = cleanStrings(summary.Verification)
+	summary.Remaining = cleanStrings(summary.Remaining)
+	if summary.FeatureID == "" || summary.RepoPath == "." || summary.Outcome == "" {
+		return CheckpointSummary{}, errors.New("feature ID, repository path, and outcome are required")
+	}
+	if !commitSHAPattern.MatchString(summary.BaseSHA) || !commitSHAPattern.MatchString(summary.HeadSHA) {
+		return CheckpointSummary{}, errors.New("base and head commits must be 7-64 character hexadecimal Git SHAs")
+	}
+	if summary.BaseSHA == summary.HeadSHA {
+		return CheckpointSummary{}, errors.New("base and head commits must be different")
+	}
+	if summary.SchemaVersion == 0 {
+		summary.SchemaVersion = 1
+	}
+	if summary.SchemaVersion != 1 {
+		return CheckpointSummary{}, fmt.Errorf("unsupported checkpoint summary schema version %d", summary.SchemaVersion)
+	}
+	if _, err := s.GetFeature(ctx, summary.FeatureID); err != nil {
+		return CheckpointSummary{}, err
+	}
+	decisions, _ := json.Marshal(summary.Decisions)
+	verification, _ := json.Marshal(summary.Verification)
+	remaining, _ := json.Marshal(summary.Remaining)
+	summary.GeneratedAt = s.now()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return CheckpointSummary{}, err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `INSERT INTO checkpoint_summaries(
+		feature_id, repo_path, base_sha, head_sha, outcome, decisions_json, verification_json, remaining_json,
+		session_id, source, model_name, schema_version, generated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(feature_id, repo_path, base_sha, head_sha) DO UPDATE SET
+		outcome = excluded.outcome,
+		decisions_json = excluded.decisions_json,
+		verification_json = excluded.verification_json,
+		remaining_json = excluded.remaining_json,
+		session_id = excluded.session_id,
+		source = excluded.source,
+		model_name = excluded.model_name,
+		schema_version = excluded.schema_version,
+		generated_at = excluded.generated_at`,
+		summary.FeatureID, summary.RepoPath, summary.BaseSHA, summary.HeadSHA, summary.Outcome,
+		string(decisions), string(verification), string(remaining), summary.SessionID, summary.Source,
+		summary.ModelName, summary.SchemaVersion, formatTime(summary.GeneratedAt))
+	if err != nil {
+		return CheckpointSummary{}, fmt.Errorf("saving checkpoint summary: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE features SET updated_at = ? WHERE id = ?`, formatTime(summary.GeneratedAt), summary.FeatureID); err != nil {
+		return CheckpointSummary{}, fmt.Errorf("updating feature checkpoint activity: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return CheckpointSummary{}, err
+	}
+	return s.checkpointSummary(ctx, summary.FeatureID, summary.RepoPath, summary.BaseSHA, summary.HeadSHA)
+}
+
+func cleanStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
 func (s *Store) GetFeature(ctx context.Context, id string) (Feature, error) {
 	return getFeature(ctx, s.db, id)
 }
@@ -413,10 +518,11 @@ func (s *Store) Detail(ctx context.Context, id string) (Detail, error) {
 		return Detail{}, err
 	}
 	d := Detail{
-		Feature:  f,
-		Events:   make([]Event, 0),
-		Sessions: make([]SessionBinding, 0),
-		Scope:    make([]ScopeItem, 0),
+		Feature:             f,
+		Events:              make([]Event, 0),
+		Sessions:            make([]SessionBinding, 0),
+		Scope:               make([]ScopeItem, 0),
+		CheckpointSummaries: make([]CheckpointSummary, 0),
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id, feature_id, kind, note, session_id, commit_sha, created_at FROM feature_events WHERE feature_id = ? ORDER BY created_at, id`, id)
 	if err != nil {
@@ -460,17 +566,122 @@ func (s *Store) Detail(ctx context.Context, id string) (Detail, error) {
 	if err != nil {
 		return Detail{}, err
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var item ScopeItem
 		var at string
 		if err := rows.Scan(&item.ID, &item.FeatureID, &item.Decision, &item.Text, &at); err != nil {
+			rows.Close()
 			return Detail{}, err
 		}
 		item.CreatedAt, _ = parseTime(at)
 		d.Scope = append(d.Scope, item)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return Detail{}, err
+	}
+	rows.Close()
+	rows, err = s.db.QueryContext(ctx, `SELECT id, feature_id, repo_path, base_sha, head_sha, outcome,
+		decisions_json, verification_json, remaining_json, session_id, source, model_name, schema_version, generated_at
+		FROM checkpoint_summaries WHERE feature_id = ? ORDER BY generated_at, id`, id)
+	if err != nil {
+		return Detail{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		summary, err := scanCheckpointSummary(rows)
+		if err != nil {
+			return Detail{}, err
+		}
+		d.CheckpointSummaries = append(d.CheckpointSummaries, summary)
+	}
 	return d, rows.Err()
+}
+
+type rowScanner interface {
+	Scan(...any) error
+}
+
+func scanCheckpointSummary(row rowScanner) (CheckpointSummary, error) {
+	var summary CheckpointSummary
+	var decisions, verification, remaining, generatedAt string
+	if err := row.Scan(
+		&summary.ID, &summary.FeatureID, &summary.RepoPath, &summary.BaseSHA, &summary.HeadSHA, &summary.Outcome,
+		&decisions, &verification, &remaining, &summary.SessionID, &summary.Source, &summary.ModelName,
+		&summary.SchemaVersion, &generatedAt,
+	); err != nil {
+		return CheckpointSummary{}, err
+	}
+	if err := json.Unmarshal([]byte(decisions), &summary.Decisions); err != nil {
+		return CheckpointSummary{}, fmt.Errorf("decoding checkpoint decisions: %w", err)
+	}
+	if err := json.Unmarshal([]byte(verification), &summary.Verification); err != nil {
+		return CheckpointSummary{}, fmt.Errorf("decoding checkpoint verification: %w", err)
+	}
+	if err := json.Unmarshal([]byte(remaining), &summary.Remaining); err != nil {
+		return CheckpointSummary{}, fmt.Errorf("decoding checkpoint remaining work: %w", err)
+	}
+	summary.GeneratedAt, _ = parseTime(generatedAt)
+	return summary, nil
+}
+
+func (s *Store) checkpointSummary(ctx context.Context, featureID, repoPath, baseSHA, headSHA string) (CheckpointSummary, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT id, feature_id, repo_path, base_sha, head_sha, outcome,
+		decisions_json, verification_json, remaining_json, session_id, source, model_name, schema_version, generated_at
+		FROM checkpoint_summaries WHERE feature_id = ? AND repo_path = ? AND base_sha = ? AND head_sha = ?`,
+		featureID, repoPath, baseSHA, headSHA)
+	return scanCheckpointSummary(row)
+}
+
+func (s *Store) ResolveFeatureContext(ctx context.Context, sessionID, repoPath, branch, project string) (FeatureContext, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	repoPath = filepath.Clean(strings.TrimSpace(repoPath))
+	branch = strings.TrimSpace(branch)
+	project = strings.TrimSpace(project)
+	if sessionID != "" {
+		var featureID string
+		err := s.db.QueryRowContext(ctx, `SELECT feature_id FROM feature_sessions
+			WHERE harbor_session_id = ? OR external_session_id = ? ORDER BY bound_at DESC LIMIT 1`, sessionID, sessionID).Scan(&featureID)
+		if err == nil {
+			detail, detailErr := s.Detail(ctx, featureID)
+			return FeatureContext{Match: "session", Detail: &detail}, detailErr
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return FeatureContext{}, err
+		}
+	}
+	if repoPath != "." {
+		query := `SELECT feature_id FROM feature_sessions WHERE repo_path = ?`
+		args := []any{repoPath}
+		if branch != "" {
+			query += ` AND branch = ?`
+			args = append(args, branch)
+		}
+		query += ` ORDER BY bound_at DESC LIMIT 1`
+		var featureID string
+		err := s.db.QueryRowContext(ctx, query, args...).Scan(&featureID)
+		if err == nil {
+			detail, detailErr := s.Detail(ctx, featureID)
+			return FeatureContext{Match: "repository", Detail: &detail}, detailErr
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return FeatureContext{}, err
+		}
+	}
+	if project != "" {
+		features, err := s.ListFeatures(ctx, project, StatusActive)
+		if err != nil {
+			return FeatureContext{}, err
+		}
+		if len(features) == 1 {
+			detail, detailErr := s.Detail(ctx, features[0].ID)
+			return FeatureContext{Match: "project", Detail: &detail}, detailErr
+		}
+		if len(features) > 1 {
+			return FeatureContext{Match: "ambiguous"}, nil
+		}
+	}
+	return FeatureContext{Match: "none"}, nil
 }
 
 func (s *Store) BuildReport(ctx context.Context, since, now time.Time) (Report, error) {

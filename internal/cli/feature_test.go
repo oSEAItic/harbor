@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -62,5 +64,82 @@ func TestFeatureCheckpointCommitFlag(t *testing.T) {
 	event := detail.Events[len(detail.Events)-1]
 	if event.CommitSHA != "0123456789abcdef" || event.Note != "tests pass" {
 		t.Fatalf("unexpected checkpoint: %+v", event)
+	}
+}
+
+func TestFeatureCheckpointFinalizeCommand(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HARBOR_HOME", home)
+	repo := t.TempDir()
+	runFeatureGit(t, repo, "init")
+	runFeatureGit(t, repo, "config", "user.name", "Harbor Test")
+	runFeatureGit(t, repo, "config", "user.email", "harbor@example.com")
+	writeFeatureCommit(t, repo, "one.txt", "one", "one")
+	base := featureGitValue(t, repo, "rev-parse", "HEAD")
+	writeFeatureCommit(t, repo, "two.txt", "two", "two")
+	head := featureGitValue(t, repo, "rev-parse", "HEAD")
+
+	store, err := worklog.NewStoreAt(filepath.Join(home, "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	feature, err := store.CreateFeature(context.Background(), filepath.Base(repo), "CLI summary", "", "", 0)
+	if err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	format := "json"
+	cmd := newFeatureCheckpointFinalizeCmd(&format)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{feature.ID, "--repo", repo, "--base", base, "--head", head, "--outcome", "Delivered structured summaries", "--decision", "Keep Git authoritative", "--verification", "go test ./...", "--remaining", "Studio rendering", "--source", "codex", "--session", "thr_1"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(output.Bytes(), []byte(`"outcome": "Delivered structured summaries"`)) {
+		t.Fatalf("unexpected output: %s", output.String())
+	}
+
+	store, err = worklog.NewStoreAt(filepath.Join(home, "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	detail, err := store.Detail(context.Background(), feature.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.CheckpointSummaries) != 1 || detail.CheckpointSummaries[0].HeadSHA != head {
+		t.Fatalf("unexpected summaries: %+v", detail.CheckpointSummaries)
+	}
+}
+
+func writeFeatureCommit(t *testing.T, repo, name, content, message string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(repo, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runFeatureGit(t, repo, "add", name)
+	runFeatureGit(t, repo, "commit", "-m", message)
+}
+
+func featureGitValue(t *testing.T, repo string, args ...string) string {
+	t.Helper()
+	out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(bytes.TrimSpace(out))
+}
+
+func runFeatureGit(t *testing.T, repo string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }

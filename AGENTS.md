@@ -85,6 +85,8 @@ harbor feature start "Shopee reconciliation" --project oseaitic-erp --type integ
 harbor feature bind feat_abc123 --session "$HARBOR_SESSION" --source codex --model <model-name> --external-session <conversation-id>
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123
+harbor feature checkpoint feat_abc123 --commit <git-sha> --note "working checkpoint"
+harbor feature checkpoint finalize feat_abc123 --repo . --base <before-sha> --head <after-sha> --outcome "what this delivered" --verification "test command and result"
 harbor feature verify feat_abc123 --note "acceptance tests pass"
 harbor feature ship feat_abc123
 
@@ -101,6 +103,11 @@ session, or pass `--model` explicitly when multiple models share one client.
 
 Only mark a feature `verify` after checking its acceptance criteria. A feature
 must be verified before Harbor allows it to be shipped.
+
+Use `checkpoint finalize` only after a coherent Git range exists. Summarize
+durable outcomes, decisions, checks that actually ran, and remaining work. Do
+not treat transcripts, raw diffs, or changed-file lists as the authoritative
+development record, and do not create or guess a Feature from hook metadata.
 
 ### Harbor Farm
 

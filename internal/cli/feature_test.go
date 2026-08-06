@@ -67,6 +67,68 @@ func TestFeatureCheckpointCommitFlag(t *testing.T) {
 	}
 }
 
+func TestFeaturePlanSetsAndClearsTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HARBOR_HOME", home)
+	store, err := worklog.NewStoreAt(filepath.Join(home, "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	feature, err := store.CreateFeature(context.Background(), "harbor", "CLI delivery target", "", "", 0, "")
+	if err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	format := "json"
+	plan := newFeaturePlanCmd(&format)
+	plan.SetOut(&bytes.Buffer{})
+	plan.SetArgs([]string{feature.ID, "--target", "2026-08-18"})
+	if err := plan.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = worklog.NewStoreAt(filepath.Join(home, "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	planned, err := store.GetFeature(context.Background(), feature.ID)
+	if err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if planned.TargetDate != "2026-08-18" {
+		store.Close()
+		t.Fatalf("target date = %q, want 2026-08-18", planned.TargetDate)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	clear := newFeaturePlanCmd(&format)
+	clear.SetOut(&bytes.Buffer{})
+	clear.SetArgs([]string{feature.ID, "--clear-target"})
+	if err := clear.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = worklog.NewStoreAt(filepath.Join(home, "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	planned, err = store.GetFeature(context.Background(), feature.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if planned.TargetDate != "" {
+		t.Fatalf("cleared target date = %q, want empty", planned.TargetDate)
+	}
+}
+
 func TestFeatureCheckpointFinalizeCommand(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HARBOR_HOME", home)

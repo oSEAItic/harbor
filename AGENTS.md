@@ -81,7 +81,8 @@ in a local SQLite database. Worklog data stays local and is not part of Harbor
 Cloud memory sync.
 
 ```bash
-harbor feature start "Shopee reconciliation" --project oseaitic-erp --type integration --size M --budget 2d
+harbor feature start "Shopee reconciliation" --project oseaitic-erp --type integration --size M --budget 2d --target 2026-08-18
+harbor feature plan feat_abc123 --target 2026-08-21
 harbor feature bind feat_abc123 --session "$HARBOR_SESSION" --source codex --model <model-name> --external-session <conversation-id>
 harbor feature block feat_abc123 --note "waiting for staging"
 harbor feature resume feat_abc123

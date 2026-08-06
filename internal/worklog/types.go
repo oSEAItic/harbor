@@ -27,6 +27,7 @@ type Feature struct {
 	Kind          string    `json:"type,omitempty"`
 	Size          string    `json:"size,omitempty"`
 	BudgetSeconds int64     `json:"budget_seconds,omitempty"`
+	TargetDate    string    `json:"target_date,omitempty"`
 	Status        string    `json:"status"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

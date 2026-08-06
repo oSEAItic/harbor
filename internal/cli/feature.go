@@ -19,6 +19,7 @@ func newFeatureCmd(outputFormat *string) *cobra.Command {
 	checkpoint.AddCommand(newFeatureCheckpointFinalizeCmd(outputFormat))
 	cmd.AddCommand(
 		newFeatureStartCmd(outputFormat),
+		newFeaturePlanCmd(outputFormat),
 		newFeatureListCmd(outputFormat),
 		newFeatureShowCmd(outputFormat),
 		newFeatureContextCmd(outputFormat),
@@ -77,7 +78,7 @@ func newFeatureContextCmd(outputFormat *string) *cobra.Command {
 }
 
 func newFeatureStartCmd(outputFormat *string) *cobra.Command {
-	var project, kind, size, budget string
+	var project, kind, size, budget, target string
 	cmd := &cobra.Command{
 		Use:   "start <title>",
 		Short: "Start tracking a feature",
@@ -99,7 +100,7 @@ func newFeatureStartCmd(outputFormat *string) *cobra.Command {
 				return err
 			}
 			defer store.Close()
-			feature, err := store.CreateFeature(cmd.Context(), project, args[0], kind, size, budgetDuration)
+			feature, err := store.CreateFeature(cmd.Context(), project, args[0], kind, size, budgetDuration, target)
 			if err != nil {
 				return err
 			}
@@ -114,6 +115,46 @@ func newFeatureStartCmd(outputFormat *string) *cobra.Command {
 	cmd.Flags().StringVar(&kind, "type", "", "Feature type, such as bug or integration")
 	cmd.Flags().StringVar(&size, "size", "", "Initial size class, such as S, M, or L")
 	cmd.Flags().StringVar(&budget, "budget", "", "Delivery budget, such as 8h or 2d")
+	cmd.Flags().StringVar(&target, "target", "", "Target delivery date in YYYY-MM-DD format")
+	return cmd
+}
+
+func newFeaturePlanCmd(outputFormat *string) *cobra.Command {
+	var target string
+	var clearTarget bool
+	cmd := &cobra.Command{
+		Use:   "plan <feature-id>",
+		Short: "Set or clear a feature delivery target",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(target) == "" && !clearTarget {
+				return fmt.Errorf("provide --target or --clear-target")
+			}
+			if strings.TrimSpace(target) != "" && clearTarget {
+				return fmt.Errorf("--target and --clear-target cannot be used together")
+			}
+			store, err := worklog.NewStore()
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			feature, err := store.SetTargetDate(cmd.Context(), args[0], target)
+			if err != nil {
+				return err
+			}
+			if *outputFormat == "json" {
+				return printJSON(cmd, feature)
+			}
+			if feature.TargetDate == "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s: cleared target date\n", feature.ID)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s: target %s\n", feature.ID, feature.TargetDate)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&target, "target", "", "Target delivery date in YYYY-MM-DD format")
+	cmd.Flags().BoolVar(&clearTarget, "clear-target", false, "Clear the current target date")
 	return cmd
 }
 
@@ -138,9 +179,9 @@ func newFeatureListCmd(outputFormat *string) *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "No matching features.")
 				return nil
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%-18s %-12s %-10s %-4s %s\n", "ID", "PROJECT", "STATUS", "SIZE", "TITLE")
+			fmt.Fprintf(cmd.OutOrStdout(), "%-18s %-12s %-10s %-10s %-4s %s\n", "ID", "PROJECT", "STATUS", "TARGET", "SIZE", "TITLE")
 			for _, f := range features {
-				fmt.Fprintf(cmd.OutOrStdout(), "%-18s %-12s %-10s %-4s %s\n", f.ID, truncateStr(f.Project, 12), f.Status, f.Size, f.Title)
+				fmt.Fprintf(cmd.OutOrStdout(), "%-18s %-12s %-10s %-10s %-4s %s\n", f.ID, truncateStr(f.Project, 12), f.Status, f.TargetDate, f.Size, f.Title)
 			}
 			return nil
 		},
@@ -176,6 +217,9 @@ func newFeatureShowCmd(outputFormat *string) *cobra.Command {
 			}
 			if f.BudgetSeconds > 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "\nBudget: %s", formatDuration(time.Duration(f.BudgetSeconds)*time.Second))
+			}
+			if f.TargetDate != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "\nTarget: %s", f.TargetDate)
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "\n\nTimeline:")
 			for _, event := range detail.Events {

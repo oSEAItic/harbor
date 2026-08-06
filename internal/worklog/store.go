@@ -18,7 +18,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 var commitSHAPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,64}$`)
 
@@ -63,6 +63,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			kind TEXT NOT NULL DEFAULT '',
 			size TEXT NOT NULL DEFAULT '',
 			budget_seconds INTEGER NOT NULL DEFAULT 0,
+			target_date TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
@@ -133,6 +134,9 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err := s.ensureColumn(ctx, "feature_events", "commit_sha", `TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	if err := s.ensureColumn(ctx, "features", "target_date", `TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
 	if currentVersion.Valid && currentVersion.Int64 == schemaVersion {
 		return nil
 	}
@@ -177,7 +181,7 @@ func (s *Store) ensureColumn(ctx context.Context, table, column, definition stri
 	return nil
 }
 
-func (s *Store) CreateFeature(ctx context.Context, project, title, kind, size string, budget time.Duration) (Feature, error) {
+func (s *Store) CreateFeature(ctx context.Context, project, title, kind, size string, budget time.Duration, targetDate string) (Feature, error) {
 	project = strings.TrimSpace(project)
 	title = strings.TrimSpace(title)
 	if project == "" || title == "" {
@@ -186,10 +190,14 @@ func (s *Store) CreateFeature(ctx context.Context, project, title, kind, size st
 	if budget < 0 {
 		return Feature{}, errors.New("budget cannot be negative")
 	}
+	targetDate, err := normalizeTargetDate(targetDate)
+	if err != nil {
+		return Feature{}, err
+	}
 	now := s.now()
 	f := Feature{
 		ID: "feat_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12], Project: project, Title: title,
-		Kind: strings.ToLower(strings.TrimSpace(kind)), Size: strings.ToUpper(strings.TrimSpace(size)), BudgetSeconds: int64(budget.Seconds()),
+		Kind: strings.ToLower(strings.TrimSpace(kind)), Size: strings.ToUpper(strings.TrimSpace(size)), BudgetSeconds: int64(budget.Seconds()), TargetDate: targetDate,
 		Status: StatusActive, CreatedAt: now, UpdatedAt: now,
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -197,8 +205,8 @@ func (s *Store) CreateFeature(ctx context.Context, project, title, kind, size st
 		return Feature{}, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO features(id, project, title, kind, size, budget_seconds, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		f.ID, f.Project, f.Title, f.Kind, f.Size, f.BudgetSeconds, f.Status, formatTime(now), formatTime(now)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO features(id, project, title, kind, size, budget_seconds, target_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		f.ID, f.Project, f.Title, f.Kind, f.Size, f.BudgetSeconds, f.TargetDate, f.Status, formatTime(now), formatTime(now)); err != nil {
 		return Feature{}, fmt.Errorf("creating feature: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO feature_events(feature_id, kind, created_at) VALUES (?, ?, ?)`, f.ID, EventStarted, formatTime(now)); err != nil {
@@ -208,6 +216,38 @@ func (s *Store) CreateFeature(ctx context.Context, project, title, kind, size st
 		return Feature{}, err
 	}
 	return f, nil
+}
+
+func normalizeTargetDate(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil || parsed.Format("2006-01-02") != value {
+		return "", fmt.Errorf("target date must use YYYY-MM-DD")
+	}
+	return value, nil
+}
+
+func (s *Store) SetTargetDate(ctx context.Context, featureID, targetDate string) (Feature, error) {
+	targetDate, err := normalizeTargetDate(targetDate)
+	if err != nil {
+		return Feature{}, err
+	}
+	now := s.now()
+	result, err := s.db.ExecContext(ctx, `UPDATE features SET target_date = ?, updated_at = ? WHERE id = ?`, targetDate, formatTime(now), strings.TrimSpace(featureID))
+	if err != nil {
+		return Feature{}, fmt.Errorf("updating feature target date: %w", err)
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return Feature{}, err
+	}
+	if changed == 0 {
+		return Feature{}, fmt.Errorf("feature %q not found", featureID)
+	}
+	return s.GetFeature(ctx, featureID)
 }
 
 func (s *Store) AddEvent(ctx context.Context, featureID, kind, note, sessionID string) (Feature, error) {
@@ -462,8 +502,8 @@ type queryRower interface {
 func getFeature(ctx context.Context, q queryRower, id string) (Feature, error) {
 	var f Feature
 	var created, updated string
-	err := q.QueryRowContext(ctx, `SELECT id, project, title, kind, size, budget_seconds, status, created_at, updated_at FROM features WHERE id = ?`, strings.TrimSpace(id)).Scan(
-		&f.ID, &f.Project, &f.Title, &f.Kind, &f.Size, &f.BudgetSeconds, &f.Status, &created, &updated)
+	err := q.QueryRowContext(ctx, `SELECT id, project, title, kind, size, budget_seconds, target_date, status, created_at, updated_at FROM features WHERE id = ?`, strings.TrimSpace(id)).Scan(
+		&f.ID, &f.Project, &f.Title, &f.Kind, &f.Size, &f.BudgetSeconds, &f.TargetDate, &f.Status, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Feature{}, fmt.Errorf("feature %q not found", id)
 	}
@@ -482,7 +522,7 @@ func getFeature(ctx context.Context, q queryRower, id string) (Feature, error) {
 }
 
 func (s *Store) ListFeatures(ctx context.Context, project, status string) ([]Feature, error) {
-	query := `SELECT id, project, title, kind, size, budget_seconds, status, created_at, updated_at FROM features WHERE 1=1`
+	query := `SELECT id, project, title, kind, size, budget_seconds, target_date, status, created_at, updated_at FROM features WHERE 1=1`
 	var args []any
 	if strings.TrimSpace(project) != "" {
 		query += ` AND project = ?`
@@ -502,7 +542,7 @@ func (s *Store) ListFeatures(ctx context.Context, project, status string) ([]Fea
 	for rows.Next() {
 		var f Feature
 		var created, updated string
-		if err := rows.Scan(&f.ID, &f.Project, &f.Title, &f.Kind, &f.Size, &f.BudgetSeconds, &f.Status, &created, &updated); err != nil {
+		if err := rows.Scan(&f.ID, &f.Project, &f.Title, &f.Kind, &f.Size, &f.BudgetSeconds, &f.TargetDate, &f.Status, &created, &updated); err != nil {
 			return nil, err
 		}
 		f.CreatedAt, _ = parseTime(created)

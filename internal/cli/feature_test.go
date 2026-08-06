@@ -36,7 +36,7 @@ func TestFeatureCheckpointCommitFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	feature, err := store.CreateFeature(context.Background(), "harbor", "CLI commit evidence", "", "", 0)
+	feature, err := store.CreateFeature(context.Background(), "harbor", "CLI commit evidence", "", "", 0, "")
 	if err != nil {
 		store.Close()
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestFeatureCheckpointFinalizeCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	feature, err := store.CreateFeature(context.Background(), filepath.Base(repo), "CLI summary", "", "", 0)
+	feature, err := store.CreateFeature(context.Background(), filepath.Base(repo), "CLI summary", "", "", 0, "")
 	if err != nil {
 		store.Close()
 		t.Fatal(err)

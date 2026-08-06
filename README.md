@@ -236,7 +236,10 @@ sessions to features and measure that full cycle:
 
 ```bash
 harbor feature start "Shopee reconciliation" \
-  --project oseaitic-erp --type integration --size M --budget 2d
+  --project oseaitic-erp --type integration --size M --budget 2d --target 2026-08-18
+
+harbor feature plan feat_abc123 --target 2026-08-21
+harbor feature plan feat_abc123 --clear-target
 
 harbor feature bind feat_abc123 \
   --session "$HARBOR_SESSION" --source codex --model <model-name> --external-session <conversation-id>

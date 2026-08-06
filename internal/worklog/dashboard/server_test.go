@@ -19,7 +19,7 @@ func TestDashboardHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	feature, err := store.CreateFeature(context.Background(), "harbor", "Feature calendar", "feature", "M", 24*time.Hour)
+	feature, err := store.CreateFeature(context.Background(), "harbor", "Feature calendar", "feature", "M", 24*time.Hour, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,11 +18,11 @@ func TestFeatureLifecycleReport(t *testing.T) {
 
 	t0 := time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC)
 	store.now = func() time.Time { return t0 }
-	feature, err := store.CreateFeature(ctx, "harbor", "Track feature cycles", "feature", "m", 48*time.Hour)
+	feature, err := store.CreateFeature(ctx, "harbor", "Track feature cycles", "feature", "m", 48*time.Hour, "2026-07-18")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if feature.Size != "M" || feature.Status != StatusActive {
+	if feature.Size != "M" || feature.Status != StatusActive || feature.TargetDate != "2026-07-18" {
 		t.Fatalf("unexpected feature: %+v", feature)
 	}
 
@@ -75,6 +75,78 @@ func TestFeatureLifecycleReport(t *testing.T) {
 	}
 }
 
+func TestFeatureTargetDateCanBeRescheduledAndCleared(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewStoreAt(filepath.Join(t.TempDir(), "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	feature, err := store.CreateFeature(ctx, "studio", "Portfolio timeline", "feature", "M", 0, "2026-08-18")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feature.TargetDate != "2026-08-18" {
+		t.Fatalf("target date = %q, want 2026-08-18", feature.TargetDate)
+	}
+
+	feature, err = store.SetTargetDate(ctx, feature.ID, "2026-08-21")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feature.TargetDate != "2026-08-21" {
+		t.Fatalf("rescheduled target date = %q, want 2026-08-21", feature.TargetDate)
+	}
+	listed, err := store.ListFeatures(ctx, "studio", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].TargetDate != "2026-08-21" {
+		t.Fatalf("unexpected listed feature: %+v", listed)
+	}
+	detail, err := store.Detail(ctx, feature.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Feature.TargetDate != "2026-08-21" {
+		t.Fatalf("detail target date = %q, want 2026-08-21", detail.Feature.TargetDate)
+	}
+
+	feature, err = store.SetTargetDate(ctx, feature.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feature.TargetDate != "" {
+		t.Fatalf("cleared target date = %q, want empty", feature.TargetDate)
+	}
+}
+
+func TestFeatureTargetDateValidation(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewStoreAt(filepath.Join(t.TempDir(), "worklog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	for _, target := range []string{"2026/08/18", "2026-8-18", "2026-02-30"} {
+		if _, err := store.CreateFeature(ctx, "studio", "Invalid target", "", "", 0, target); err == nil {
+			t.Fatalf("CreateFeature accepted invalid target date %q", target)
+		}
+	}
+	feature, err := store.CreateFeature(ctx, "studio", "Valid target", "", "", 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetTargetDate(ctx, feature.ID, "not-a-date"); err == nil {
+		t.Fatal("SetTargetDate accepted an invalid target date")
+	}
+	if _, err := store.SetTargetDate(ctx, "feat_missing", "2026-08-18"); err == nil {
+		t.Fatal("SetTargetDate accepted a missing feature")
+	}
+}
+
 func TestEstimateUsesShippedMatchingFeatures(t *testing.T) {
 	ctx := context.Background()
 	store, err := NewStoreAt(filepath.Join(t.TempDir(), "worklog.db"))
@@ -87,7 +159,7 @@ func TestEstimateUsesShippedMatchingFeatures(t *testing.T) {
 	for i, cycle := range []time.Duration{24 * time.Hour, 48 * time.Hour, 96 * time.Hour} {
 		start := t0.Add(time.Duration(i) * 7 * 24 * time.Hour)
 		store.now = func() time.Time { return start }
-		feature, err := store.CreateFeature(ctx, "harbor", "Feature", "integration", "M", 0)
+		feature, err := store.CreateFeature(ctx, "harbor", "Feature", "integration", "M", 0, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +188,7 @@ func TestScopeValidationAndSessionDeduplication(t *testing.T) {
 	}
 	defer store.Close()
 
-	feature, err := store.CreateFeature(ctx, "harbor", "Feature", "", "", 0)
+	feature, err := store.CreateFeature(ctx, "harbor", "Feature", "", "", 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +234,7 @@ func TestReopenedFeatureContinuesCycle(t *testing.T) {
 
 	t0 := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	store.now = func() time.Time { return t0 }
-	feature, err := store.CreateFeature(ctx, "harbor", "Feature", "", "", 0)
+	feature, err := store.CreateFeature(ctx, "harbor", "Feature", "", "", 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +272,7 @@ func TestFeatureEventCommitEvidence(t *testing.T) {
 	}
 	defer store.Close()
 
-	feature, err := store.CreateFeature(ctx, "harbor", "Commit evidence", "", "", 0)
+	feature, err := store.CreateFeature(ctx, "harbor", "Commit evidence", "", "", 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +299,7 @@ func TestCheckpointSummaryIsStructuredAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	feature, err := store.CreateFeature(ctx, "harbor", "Checkpoint summaries", "", "", 0)
+	feature, err := store.CreateFeature(ctx, "harbor", "Checkpoint summaries", "", "", 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +343,7 @@ func TestResolveFeatureContextUsesDeterministicOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	feature, err := store.CreateFeature(ctx, "harbor", "Context resolution", "", "", 0)
+	feature, err := store.CreateFeature(ctx, "harbor", "Context resolution", "", "", 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,6 +437,9 @@ func TestMigratesV1SessionTable(t *testing.T) {
 	}
 	if len(detail.Sessions) != 1 || detail.Sessions[0].ModelName != "" {
 		t.Fatalf("unexpected migrated session: %+v", detail.Sessions)
+	}
+	if detail.Feature.TargetDate != "" {
+		t.Fatalf("migrated target date = %q, want empty", detail.Feature.TargetDate)
 	}
 	if err := store.BindSession(context.Background(), SessionBinding{FeatureID: "feat_old", HarborSessionID: "ses_old", Source: "codex", ExternalSessionID: "conv_old", ModelName: "gpt-5"}); err != nil {
 		t.Fatal(err)
